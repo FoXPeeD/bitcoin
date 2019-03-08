@@ -8,6 +8,7 @@ import time
 
 
 NUM_TX = 1
+TX_DEFAULT_SENT_AMOUNT = 0.0001
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 
@@ -46,6 +47,46 @@ cliCmdArgs = [
 
 	]
 
+
+def printByteStreamOut(stream, processName=''):
+	print('# ' + processName + ' stdout:')
+	if stream is None:
+		print('<Empty>')
+	else:
+		print(stream.decode("utf-8"))
+	print('')
+
+
+def printByteStreamErr(stream, processName=''):
+	print('$ ' + processName + ' stderr:')
+	if stream is None:
+		print('<Empty>')
+	else:
+		print(stream.decode("utf-8"))
+	print('')
+
+
+def printProcessOutput(proc):
+	out, err = proc.communicate()
+	printByteStreamOut(out, 'd')
+	printByteStreamErr(err, 'd')
+
+
+def errorReturned(stream):
+	errStrListSet = set(stream.decode("utf-8").split('\n'))
+	if '' in errStrListSet and len(errStrListSet) == 1:
+		return False
+	else:
+		return True
+
+def exitWithMessageIfError(stream, errString):
+	if errorReturned(stream):
+		print('Error received:')
+		print(stream.decode("utf-8"))
+		bitcoind.terminate()
+		sys.exit(errString)
+
+
 # clean and recreate dir
 os.chdir(parentDirPath)
 if 'nodes' not in os.listdir():
@@ -71,29 +112,43 @@ print("bitcoind started")
 time.sleep(5)
 
 # get address for Txs
-GetAddressCmdArgs = cliCmdArgs
+GetAddressCmdArgs = cliCmdArgs.copy()
 GetAddressCmdArgs[5] = 'getnewaddress'
+getAddrRet = subprocess.run(GetAddressCmdArgs, capture_output=True)
+addressStr = getAddrRet.stdout.decode("utf-8").split()[0]
+if len(addressStr) > 35 or len(addressStr) < 26:
+	printByteStreamOut(getAddrRet.stdout, 'cli')
+	printByteStreamErr(getAddrRet.stderr, 'cli')
+	bitcoind.terminate()
+	printProcessOutput(bitcoind)
+	sys.exit('Error getting address')
 
-ret = subprocess.run(cliCmdArgs, capture_output=True)
-print("ret output:")
-print(ret.stdout)
-print("ret error:")
-print(ret.stderr)
-# if ret != 0:
-# 	sys.exit("Error getting address")
 
-out, err = bitcoind.communicate()
-print("d output:")
-print(out.decode("utf-8"))
-print("d error:")
-print(err.decode("utf-8"))
+# generate blocks for funds
+generateCmdArgs = cliCmdArgs.copy()
+generateCmdArgs.append('')  # amount
+generateCmdArgs[5] = 'generate'
+generateCmdArgs[6] = '101'
+genRet = subprocess.run(generateCmdArgs, capture_output=True)
+# printByteStreamOut(genRet.stdout, 'cli')
+# printByteStreamErr(genRet.stderr, 'cli')
+exitWithMessageIfError(genRet.stderr, "Error generating initial blocks")
+
+
+# send Txs
+TxCmdArgs = cliCmdArgs.copy()
+TxCmdArgs.append('')  # address
+TxCmdArgs.append('')  # amount
+TxCmdArgs[5] = 'sendtoaddress'
+TxCmdArgs[6] = addressStr
+for txNum in range(0, NUM_TX):
+	TxCmdArgs[7] = str(TX_DEFAULT_SENT_AMOUNT)
+	sendTxRet = subprocess.run(TxCmdArgs, capture_output=True)
+	# printByteStreamOut(sendTxRet.stdout, 'cli')
+	# printByteStreamErr(sendTxRet.stderr, 'cli')
+	if errorReturned(sendTxRet.stderr):
+		bitcoind.terminate()
+		sys.exit("Error sending Txs")
+
 bitcoind.terminate()
-#
-# TxCmdArgs = cliCmdArgs
-# for txNum in range(0, NUM_TX):
-#
-# 	ret = subprocess.call(cliCmdArgs, stdout=subprocess.PIPE)
-# 	if ret != 0:
-# 		sys.exit("Error sending Txs")
-#
-
+# printProcessOutput(bitcoind)
