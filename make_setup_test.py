@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python
 
 import os, sys
 import shutil
@@ -6,25 +6,27 @@ import subprocess
 import shlex
 import time
 
-NUM_CLIENTS = 4
+NUM_CLIENTS = 2
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 
 ##  windows	 ##
-# nodesPath = 'C:\\Technion\\project2\\nodes\\'
-# binPath = 'C:\\Technion\\project2\\bitcoin-0.17.0\\bin'
-# paretDirPath = 'C:\\Technion\\project2\\'
-# delim = '\\'
-# bitcoindFileName = './bitcoind.exe'
-# bitcoin_cliFileName = './bitcoin-cli.exe'
+nodesPath = 'C:\\project\\nodes\\'
+binPath = 'C:\\Program Files\\Bitcoin\\daemon'
+parentDirPath = 'C:\\project\\'
+delim = '\\'	
+bitcoindFileName = 'bitcoind.exe'
+bitcoin_cliFileName = 'bitcoin-cli.exe'
 
 ##  linux  ##
-parentDirPath = '/home/blkchprj/bitcoin-git/'
-nodesPath = parentDirPath + 'nodes/'
-binPath = parentDirPath + 'bitcoin/src/'
-delim = '/'
-bitcoindFileName = './bitcoind'
-bitcoin_cliFileName = './bitcoin-cli'
+#parentDirPath = '/home/blkchprj/bitcoin-git/'
+#nodesPath = parentDirPath + 'nodes/'
+#binPath = parentDirPath + 'bitcoin/src/'
+#delim = '/'
+#bitcoindFileName = './bitcoind'
+#bitcoin_cliFileName = './bitcoin-cli'
+
+local_host = '127.0.0.1'
 
 bitcoindCmdArgs = [
 	bitcoindFileName,
@@ -42,6 +44,14 @@ cliCmdArgs = [
 	'-rpcport=9101'
 	]
 
+addNodes = [
+	bitcoin_cliFileName,
+	'-regtest',
+	'-rpcuser=rpc',
+	'-rpcpassword=rpc',
+	'-rpc_port_placeholder',
+	'connection_placeholder'
+]
 ####### setup nodes
 os.chdir(parentDirPath)
 if 'nodes' in os.listdir():
@@ -64,11 +74,21 @@ for node in range(0, NUM_CLIENTS):
 	bitcoindCmdArgs[4] = '-rpcport=' + str(rpcport)
 	confFilePath = nodeDir + delim + "bitcoin.conf"
 	with open(confFilePath, "w") as text_file:
-		print(f'rpcuser=rpc\nrpcpassword=rpc\nserver=1\nlisten=1\nrpcallowip=0.0.0.0\n-dbcache=50', file=text_file)
+		print(f'rpcuser=rpc\nrpcpassword=rpc\nserver=1\nlisten=1\ndbcache=50', file=text_file)
 
 	bc.append(subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.PIPE))
 	print("started bitcoind")
 	print("pid of client is " + str(bc[node].pid))
+
+
+for i in range(0, NUM_CLIENTS):
+	addNodes[4] = '-rpcport=' + str(BASE_PORT_NUM + i)
+	for j in range(0, NUM_CLIENTS):
+		if i == j:
+			continue
+		addNodes[5] = 'connect=' + local_host + ':' + str(BASE_PORT_NUM + j)
+		addRet = subprocess.run(addNodes, capture_output=True)
+
 
 input("Press Enter to terminate")
 for node in range(0,NUM_CLIENTS):
