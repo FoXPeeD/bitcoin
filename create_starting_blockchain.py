@@ -7,8 +7,9 @@ import shlex
 import time
 
 
-NUM_TX = 1
+NUM_TX = 11
 TX_DEFAULT_SENT_AMOUNT = 0.0001
+TX_NUMBER_MAX_IN_BLOCK = 5
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 
@@ -108,7 +109,7 @@ confFilePath = nodeDir + delim + "bitcoin.conf"
 with open(confFilePath, "w") as text_file:
 	print(f'rpcuser=rpc\nrpcpassword=rpc\nserver=1\nlisten=1\ndbcache=50', file=text_file)
 bitcoind = subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.PIPE)
-print("bitcoind started")
+print("bitcoind started, waiting 5 seconds...")
 time.sleep(5)
 
 # get address for Txs
@@ -122,18 +123,18 @@ if len(addressStr) > 35 or len(addressStr) < 26:
 	bitcoind.terminate()
 	printProcessOutput(bitcoind)
 	sys.exit('Error getting address')
-
+print("got address")
 
 # generate blocks for funds
 generateCmdArgs = cliCmdArgs.copy()
 generateCmdArgs.append('')  # amount
 generateCmdArgs[5] = 'generate'
 generateCmdArgs[6] = '101'
-genRet = subprocess.run(generateCmdArgs, capture_output=True)
+genInitRet = subprocess.run(generateCmdArgs, capture_output=True)
 # printByteStreamOut(genRet.stdout, 'cli')
 # printByteStreamErr(genRet.stderr, 'cli')
-exitWithMessageIfError(genRet.stderr, "Error generating initial blocks")
-
+exitWithMessageIfError(genInitRet.stderr, "Error generating initial blocks")
+print("generated Initial blocks (101)")
 
 # send Txs
 TxCmdArgs = cliCmdArgs.copy()
@@ -141,14 +142,36 @@ TxCmdArgs.append('')  # address
 TxCmdArgs.append('')  # amount
 TxCmdArgs[5] = 'sendtoaddress'
 TxCmdArgs[6] = addressStr
+generateCmdArgs[6] = '1'
 for txNum in range(0, NUM_TX):
 	TxCmdArgs[7] = str(TX_DEFAULT_SENT_AMOUNT)
 	sendTxRet = subprocess.run(TxCmdArgs, capture_output=True)
 	# printByteStreamOut(sendTxRet.stdout, 'cli')
 	# printByteStreamErr(sendTxRet.stderr, 'cli')
-	if errorReturned(sendTxRet.stderr):
-		bitcoind.terminate()
-		sys.exit("Error sending Txs")
+	print("new Tx")
+	exitWithMessageIfError(sendTxRet.stderr, "Error sending Txs, failed on tx number " + str(txNum))
+	if ((txNum-1) % TX_NUMBER_MAX_IN_BLOCK) == 0 and txNum != 0:
+		print("new block")
+		genRet = subprocess.run(generateCmdArgs, capture_output=True)
+		exitWithMessageIfError(genRet.stderr, "Error generating block number " + str(txNum / TX_NUMBER_MAX_IN_BLOCK))
+genLastRet = subprocess.run(generateCmdArgs, capture_output=True)
+exitWithMessageIfError(genLastRet.stderr, "Error generating last block, number:" + str(txNum / TX_NUMBER_MAX_IN_BLOCK))
+print("sent all Txs")
+
+blockInfoCmdArgs = cliCmdArgs.copy()
+blockInfoCmdArgs[5] = 'getblockchaininfo'
+ret = subprocess.run(blockInfoCmdArgs, capture_output=True)
+printByteStreamOut(ret.stdout, 'cli')
+
+walletInfoCmdArgs = cliCmdArgs.copy()
+walletInfoCmdArgs[5] = 'getwalletinfo'
+# walletInfoCmdArgs.append('wallet_dump.out')
+ret = subprocess.run(walletInfoCmdArgs, capture_output=True)
+printByteStreamOut(ret.stdout, 'cli')
+printByteStreamErr(ret.stderr, 'cli')
+
 
 bitcoind.terminate()
+print("bitcoind terminated")
+
 # printProcessOutput(bitcoind)
