@@ -14,7 +14,7 @@ BASE_RPC_PORT_NUM = 9100
 nodesPath = 'C:\\project\\nodes\\'
 binPath = 'C:\\Program Files\\Bitcoin\\daemon'
 parentDirPath = 'C:\\project\\'
-delim = '\\'	
+delim = '\\'
 bitcoindFileName = 'bitcoind.exe'
 bitcoin_cliFileName = 'bitcoin-cli.exe'
 
@@ -50,7 +50,8 @@ addNodes = [
 	'-rpcuser=rpc',
 	'-rpcpassword=rpc',
 	'-rpc_port_placeholder',
-	'connection_placeholder'
+	'connection_placeholder',
+	'add'
 ]
 ####### setup nodes
 os.chdir(parentDirPath)
@@ -80,13 +81,14 @@ for node in range(0, NUM_CLIENTS):
 	print("started bitcoind")
 	print("pid of client is " + str(bc[node].pid))
 
+# time.sleep(5)
 
 for i in range(0, NUM_CLIENTS):
 	addNodes[4] = '-rpcport=' + str(BASE_PORT_NUM + i)
 	for j in range(0, NUM_CLIENTS):
 		if i == j:
 			continue
-		addNodes[5] = 'connect=' + local_host + ':' + str(BASE_PORT_NUM + j)
+		addNodes[5] = 'addnode "' + local_host + ':' + str(BASE_PORT_NUM + j) + '"'
 		addRet = subprocess.run(addNodes, capture_output=True)
 
 
