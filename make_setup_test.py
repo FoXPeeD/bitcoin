@@ -54,6 +54,7 @@ addNodes = [
 	'-rpcpassword=rpc',
 	'-rpc_port_placeholder',
 	'connection_placeholder',
+	'ip_port_placeholder'
 	'add'
 ]
 ####### setup nodes
@@ -89,7 +90,8 @@ for i in range(0, NUM_CLIENTS):
 	for j in range(0, NUM_CLIENTS):
 		if i == j:
 			continue
-		addNodes[5] = 'addnode "' + local_host + ':' + str(BASE_PORT_NUM + j) + '"'
+		addNodes[5] = 'addnode'
+		addNodes[6] = '"' + local_host + ':' + str(BASE_PORT_NUM + j) + '"'
 		addRet = subprocess.run(addNodes, capture_output=True)
 
 
