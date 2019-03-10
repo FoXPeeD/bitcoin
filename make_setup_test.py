@@ -80,7 +80,7 @@ for node in range(0, NUM_CLIENTS):
 	bc.append(subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.PIPE))
 	print("started bitcoind")
 	print("pid of client is " + str(bc[node].pid))
-
+	
 for i in range(0, NUM_CLIENTS):
 	addNodes[4] = '-rpcport=' + str(BASE_PORT_NUM + i)
 	for j in range(0, NUM_CLIENTS):
