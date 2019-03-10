@@ -10,21 +10,24 @@ NUM_CLIENTS = 2
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 
-##  windows	 ##
-nodesPath = 'C:\\project\\nodes\\'
-binPath = 'C:\\Program Files\\Bitcoin\\daemon'
-parentDirPath = 'C:\\project\\'
-delim = '\\'
-bitcoindFileName = 'bitcoind.exe'
-bitcoin_cliFileName = 'bitcoin-cli.exe'
-
-##  linux  ##
-#parentDirPath = '/home/blkchprj/bitcoin-git/'
-#nodesPath = parentDirPath + 'nodes/'
-#binPath = parentDirPath + 'bitcoin/src/'
-#delim = '/'
-#bitcoindFileName = './bitcoind'
-#bitcoin_cliFileName = './bitcoin-cli'
+if sys.platform == "win32":
+	#  windows	 ##
+	nodesPath = 'C:\\project\\nodes\\'
+	binPath = 'C:\\Program Files\\Bitcoin\\daemon'
+	parentDirPath = 'C:\\project\\'
+	delim = '\\'
+	bitcoindFileName = 'bitcoind.exe'
+	bitcoin_cliFileName = 'bitcoin-cli.exe'
+elif sys.platform == "linux":
+	#  linux  ##
+	parentDirPath = '/home/blkchprj/bitcoin-git/'
+	nodesPath = parentDirPath + 'nodes/'
+	binPath = parentDirPath + 'bitcoin/src/'
+	delim = '/'
+	bitcoindFileName = './bitcoind'
+	bitcoin_cliFileName = './bitcoin-cli'
+else:
+	sys.exit("not supported")
 
 local_host = '127.0.0.1'
 
