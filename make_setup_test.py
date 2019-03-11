@@ -8,7 +8,7 @@ import time
 
 NUM_CLIENTS = 2
 BASE_PORT_NUM = 18100
-BASE_RPC_PORT_NUM = 9100
+BASE_RPC_PORT_NUM = 10050
 
 if sys.platform == "win32":
 	#  windows	 ##
@@ -32,22 +32,25 @@ else:
 local_host = '127.0.0.1'
 
 confDefault = [
+	'regtest=1',
 	'rpcuser=rpc',
 	'rpcpassword=rpc',
 	'server=1',
 	'listen=1',
 	'dbcache=50',
-	'whitelist=127.0.0.1'
+	'whitelist=127.0.0.1',
+	'node_dir_placeholder'
+	# 'disablewallet=1'
 ]
 
-ConfRegtest = []
+ConfRegtest = [
+	'port_placeholder',
+	'rpc_port_placeholder'
+]
 
 
 bitcoindCmdArgs = [
 	bitcoindFileName,
-	'node_dir_placeholder',
-	'port_placeholder',
-	'rpc_port_placeholder',
 	'conf_file_placeholder'
 	]
 
@@ -85,22 +88,25 @@ os.chdir(binPath)
 bc = []
 for node in range(0, NUM_CLIENTS):
 	nodeDir = nodesPath + "node" + str(node)
-	bitcoindCmdArgs[1] = '-datadir=' + nodeDir
+	confDefault[7] = 'datadir=' + nodeDir
 	port = BASE_PORT_NUM + node
-	bitcoindCmdArgs[2] = '-port=' + str(port)
+	ConfRegtest[0] = 'port=' + str(port)
 	rpcport = BASE_RPC_PORT_NUM + node
-	bitcoindCmdArgs[3] = '-rpcport=' + str(rpcport)
+	ConfRegtest[1] = 'rpcport=' + str(rpcport)
 	confFilePath = nodeDir + delim + "bitcoin.conf"
-	bitcoindCmdArgs[4] = '-conf=' + confFilePath
+	bitcoindCmdArgs[1] = '-conf=' + confFilePath
 	confThisNode = confDefault.copy()
+	confThisNodeRegTest = ConfRegtest.copy()
 	for toNode in range(0, NUM_CLIENTS):
 		if toNode == node:
 			continue
-		confThisNode.append('connect=' + local_host + ':' + str(BASE_PORT_NUM + toNode))
+		confThisNodeRegTest.append('connect=' + local_host + ':' + str(BASE_PORT_NUM + toNode))
 	content = '\n'.join(confThisNode)
-	print(content)
+	contentRegTest = '\n'.join(confThisNodeRegTest)
 	with open(confFilePath, "w") as text_file:
 		text_file.write(content)
+		text_file.write('\n\n[regtest]\n')
+		text_file.write(contentRegTest)
 
 	bc.append(subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.PIPE))
 	print("started bitcoind")
@@ -108,42 +114,24 @@ for node in range(0, NUM_CLIENTS):
 	print('')
 	time.sleep(5)
 
-# time.sleep(5)
 
-# for i in range(0, NUM_CLIENTS):
-# 	addNodes[4] = '-rpcport=' + str(BASE_RPC_PORT_NUM + i)
-# 	for j in range(0, NUM_CLIENTS):
-# 		if i == j:
-# 			continue
-# 		addNodes[4] = 'addnode'
-# 		addNodes[5] = '"' + local_host + ':' + str(BASE_PORT_NUM + j) + '"'
-# 		# print('node ' + str(i) + ': ' + addNodes[5] + ' ' + addNodes[6] + ' ' + addNodes[7])
-# 		# addNodes[4] = 'addnode ' + '"' + local_host + ':' + str(BASE_PORT_NUM + j) + '"' + ' add'
-# 		addRet = subprocess.run(addNodes, capture_output=True)
-# 		addRet = subprocess.run(addNodes, capture_output=True)
-# 		addRet = subprocess.run(addNodes, capture_output=True)
-# 		# print(addRet.stdout.decode("utf-8"))
-# 		# print(" ")
-# 		# print(addRet.stderr.decode("utf-8"))
-# 		# print('cmd')
-
-generateCmdArgs = cliCmdArgs.copy()
-generateCmdArgs.append('')  # cmd
-generateCmdArgs.append('')  # amount
-generateCmdArgs[4] = 'generate'
-generateCmdArgs[5] = '1'
-for node in range(0, NUM_CLIENTS):
-	if node != 0 :
-		continue
-	rpcport = BASE_RPC_PORT_NUM + node
-	generateCmdArgs[3] = '-rpcport=' + str(rpcport)
-	genInitRet = subprocess.run(generateCmdArgs, capture_output=True)
-	time.sleep(1)
-	print(genInitRet.stdout.decode("utf-8"))
-	print(" ")
-	print(genInitRet.stderr.decode("utf-8"))
-	print('cmd generate')
-	print(generateCmdArgs)
+# generateCmdArgs = cliCmdArgs.copy()
+# generateCmdArgs.append('')  # cmd
+# generateCmdArgs.append('')  # amount
+# generateCmdArgs[4] = 'generate'
+# generateCmdArgs[5] = '1'
+# for node in range(0, NUM_CLIENTS):
+# 	if node != 0 :
+# 		continue
+# 	rpcport = BASE_RPC_PORT_NUM + node
+# 	generateCmdArgs[3] = '-rpcport=' + str(rpcport)
+# 	genInitRet = subprocess.run(generateCmdArgs, capture_output=True)
+# 	time.sleep(1)
+# 	print(genInitRet.stdout.decode("utf-8"))
+# 	print(" ")
+# 	print(genInitRet.stderr.decode("utf-8"))
+# 	print('cmd generate')
+# 	print(generateCmdArgs)
 
 
 
