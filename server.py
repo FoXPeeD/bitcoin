@@ -24,19 +24,23 @@ s.listen()
 # a forever loop until we interrupt it or  
 # an error occurs 
 counter = 0
+expected_connection = 2
 while True: 
   
 # Establish connection with client. 
 	c, addr = s.accept()      
-	#print 'Got connection from', addr 
-	  
-	# send a thank you message to the client.  
-	#c.send('Thank you for connecting') 
+	if counter == 0:
+		# start clock
+
 	#print(addr, file=open("C:\\project\\test\\fileName.txt","a"))
 	counter = counter + 1
-	if counter > 2:
+	if counter == expected_connection:
+		# stop clock
 		break
 
 
 	# Close the connection with the client 
 	c.close() 
+
+# print result to file
+# return success
