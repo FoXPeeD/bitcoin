@@ -7,8 +7,8 @@ import shlex
 import time
 
 # parameters
-num_clients = 5
-utxo_size = 500
+num_clients = 3
+utxo_size = 50
 debug = 1
 
 # constants
@@ -93,7 +93,8 @@ confDefault = [
 	'listen=1',
 	'dbcache=50',
 	'whitelist=127.0.0.1',
-	'node_dir_placeholder'
+	'node_dir_placeholder',
+	'load_block_placeholder'
 ]
 
 confRegtest = [
@@ -143,6 +144,7 @@ confThisNode = confDefault.copy()
 confThisNodeRegTest = confRegtest.copy()
 nodeDir = nodesPath + "starting_chain_node"
 confThisNode[7] = 'datadir=' + nodeDir
+confThisNode[8] = 'loadblock=' + nodeDir + 'regtest/blocks/blk00000.dat'
 port = BASE_PORT_NUM + node
 confThisNodeRegTest[0] = 'port=' + str(port)
 rpcport = BASE_RPC_PORT_NUM + node
@@ -150,7 +152,6 @@ confThisNodeRegTest[1] = 'rpcport=' + str(rpcport)
 confFilePath = nodeDir + delim + "bitcoin.conf"
 contentDefault = '\n'.join(confThisNode)
 contentRegTest = '\n'.join(confThisNodeRegTest)
-print(confFilePath)
 with open(confFilePath, "w") as text_file:
 	text_file.write(contentDefault)
 	text_file.write('\n\n[regtest]\n')
@@ -204,6 +205,7 @@ debugPrint("	sent all Txs")
 print('created starting block')
 
 
+input('copy files and press enter')
 btcStartingChain.terminate()
 ####### move files to directories of nodes
 #	TODO: copy files from start blockchain node
@@ -215,6 +217,7 @@ bc = []
 for node in range(0, num_clients):
 	nodeDir = nodesPath + "node" + str(node)
 	confDefault[7] = 'datadir=' + nodeDir
+	confDefault[8] = 'loadblock=' + nodeDir + 'regtest/blocks/blk00000.dat'
 	port = BASE_PORT_NUM + node
 	confRegtest[0] = 'port=' + str(port)
 	rpcport = BASE_RPC_PORT_NUM + node
