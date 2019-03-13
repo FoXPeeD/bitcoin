@@ -8,7 +8,7 @@ import time
 
 # parameters
 num_clients = 3
-utxo_size = 50
+utxo_size = 10
 debug = 1
 
 # constants
@@ -18,24 +18,14 @@ BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 LOCAL_HOST = '127.0.0.1'
 
-if sys.platform == "win32":
-	#  windows	 ##
-	delim = '\\'
-	parentDirPath = 'C:\\project\\'
-	nodesPath = parentDirPath + 'nodes\\'
-	binPath = 'C:\\Program Files\\Bitcoin\\daemon'
-	bitcoindFileName = 'bitcoind.exe'
-	bitcoin_cliFileName = 'bitcoin-cli.exe'
-elif sys.platform == "linux":
-	#  linux  ##
-	delim = '/'
-	parentDirPath = os.getcwd() + '/'
-	nodesPath = parentDirPath + '../nodes/'
-	binPath = parentDirPath + 'src/'
-	bitcoindFileName = './bitcoind'
-	bitcoin_cliFileName = './bitcoin-cli'
-else:
-	sys.exit("not supported")
+
+delim = '/'
+parentDirPath = os.getcwd() + '/'
+nodesPath = parentDirPath + '../nodes/'
+binPath = parentDirPath + 'src/'
+bitcoindFileName = './bitcoind'
+bitcoin_cliFileName = './bitcoin-cli'
+
 
 ####### helper functions
 def printByteStreamOut(stream, processName=''):
@@ -252,7 +242,7 @@ for txNum in range(0, utxo_size):
 		exitWithMessageIfError(genRet.stderr, btcClients, "Error generating block number " + str(txNum / TX_NUMBER_MAX_IN_BLOCK))
 genLastRet = subprocess.run(genInitCmdArgs, capture_output=True)
 exitWithMessageIfError(genLastRet.stderr, btcClients, "Error generating last block, number:" + str(txNum / TX_NUMBER_MAX_IN_BLOCK))
-bestBlockHashMiner = genLastRet.stdout.decode("utf-8").split()[0] # best block hash of miner node
+bestBlockHashMiner = genLastRet.stdout.decode("utf-8").split()[1] # best block hash of miner node
 debugPrint('')
 debugPrint("	sent all Txs")
 print('finished generating initial chain')
@@ -268,7 +258,7 @@ while not allSynced:
 		bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
 		bestBlockRet = subprocess.run(bestBlockCmdArgs, capture_output=True)
 		exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting address')
-		bestBlockHashThisNode = bestBlockRet.stdout.decode("utf-8").split()[0]
+		bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
 		if bestBlockHashThisNode != bestBlockHashMiner:
 			allSynced = False
 			time.sleep(0.5) # wait a bit and start over
@@ -277,13 +267,9 @@ debugPrint("	all node are synced")
 
 
 # start script for timing
-try:
-	serverRet = subprocess.Popen(['python3.7', parentDirPath + 'server.py', num_clients], capture_output=True, timeout=)
-except ValueError:
-	print('Error timing block spread')
-	print(str(ValueError))
-	for node in range(0,num_clients):
-		btcClients[node].terminate()
+serverProc = subprocess.Popen(['python3.7', parentDirPath + 'server.py', str(num_clients)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+startTime = time.time()
+
 
 # generate block for timing
 generateCmdArgs = cliCmdArgs.copy()
@@ -294,9 +280,18 @@ exitWithMessageIfError(generateRet.stderr, btcClients, 'Error generating block f
 print('generated block for timing')
 
 # wait until server is done timing (all nodes got block)
-while p.poll() is None:
-    time.sleep(0.5)
+while serverProc.poll() is None:
+	if (time.time() - startTime) > 7:	#
+		print('server took too much time to finish')
+		for node in range(0,num_clients):
+			btcClients[node].terminate()
+			serverProc.terminate()
+		exit(0)
+	else:
+		time.sleep(0.5)
 
+print('blah v2')
+printProcessOutput(serverProc)
 with open(parentDirPath + 'time.txt') as f:
 	timeGot= f.read()
 debugPrint('	time got ' + str(timeGot) + ' seconds')
