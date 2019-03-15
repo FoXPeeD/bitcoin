@@ -8,12 +8,12 @@ import time
 
 # parameters
 num_clients = 3
-utxo_size = 10
+utxo_size = 200
 debug = 1
 
 # constants
 TX_DEFAULT_SENT_AMOUNT = 0.0001
-TX_NUMBER_MAX_IN_BLOCK = 5
+TX_NUMBER_MAX_IN_BLOCK = 10
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 LOCAL_HOST = '127.0.0.1'
@@ -91,7 +91,8 @@ confDefault = [
 	'listen=1',
 	'dbcache=50',
 	'whitelist=127.0.0.1',
-	'node_dir_placeholder'
+	'node_dir_placeholder',
+	'blocknotify=python3.7 ' + parentDirPath + 'block.py %s'
 ]
 
 confRegtest = [
@@ -222,6 +223,7 @@ exitWithMessageIfError(getAddrRet.stderr, btcClients, 'Error getting address')
 addressStr = getAddrRet.stdout.decode("utf-8").split()[0]
 debugPrint("	got address " + addressStr)
 
+t0 = time.time()
 # send Txs
 TxCmdArgs = initCmdArgs.copy()
 TxCmdArgs.append('sendtoaddress')
@@ -245,6 +247,8 @@ exitWithMessageIfError(genLastRet.stderr, btcClients, "Error generating last blo
 bestBlockHashMiner = genLastRet.stdout.decode("utf-8").split()[1] # best block hash of miner node
 debugPrint('')
 debugPrint("	sent all Txs")
+timeTook = time.time() - t0
+print(str(utxo_size) + ' Txs took ' + str(timeTook) + ' (avg '  + str(timeTook/utxo_size) + ' sec per Tx)')
 print('finished generating initial chain')
 
 # make sure all node are synced getbestblockhash
@@ -281,7 +285,7 @@ print('generated block for timing')
 
 # wait until server is done timing (all nodes got block)
 while serverProc.poll() is None:
-	if (time.time() - startTime) > 7:	#
+	if (time.time() - startTime) > 15:	#
 		print('server took too much time to finish')
 		for node in range(0,num_clients):
 			btcClients[node].terminate()
@@ -290,11 +294,11 @@ while serverProc.poll() is None:
 	else:
 		time.sleep(0.5)
 
-print('blah v2')
-printProcessOutput(serverProc)
+print('server finished')
+# printProcessOutput(serverProc)
 with open(parentDirPath + 'time.txt') as f:
 	timeGot= f.read()
-debugPrint('	time got ' + str(timeGot) + ' seconds')
+	debugPrint('times:\n' + str(timeGot))
 
 
 input("Press Enter to terminate")

@@ -2,9 +2,11 @@
 import os
 import socket
 import time
+import sys
 
+print('serever start')
 
-timeFilePath =  os.getcwd() + '/time.txt'
+timeFilePath =  os.getcwd() + '/../time.txt'
 # next create a socket object
 s = socket.socket()
 #print "Socket successfully created"
@@ -28,27 +30,22 @@ s.listen()
 # a forever loop until we interrupt it or  
 # an error occurs 
 counter = 0
-expected_connection = 2
+expected_connections = int(sys.argv[1])
 while True:
-
 # Establish connection with client.
 	c, addr = s.accept()
 	if counter == 0:
 		# start clock
 		t0 = time.time()
-
-	#print(addr, file=open("C:\\project\\test\\fileName.txt","a"))
-	counter = counter + 1
-	if counter == expected_connection:
-		# stop clock
+		print(str(counter) + ',' + str(0), file=open(timeFilePath,'w'))
+	else:
 		t1 = time.time()
-		with open(timeFilePath, "w") as text_file:
-			text_file.write(str(t1-t0) + '\n')
+		print(str(counter) + ',' + str(t1-t0), file=open(timeFilePath,'a'))
+	counter = counter + 1
+	if counter == expected_connections:
 		break
-
 
 	# Close the connection with the client
 	c.close()
 
 exit(0)
-# return success

@@ -5,7 +5,10 @@
 
 ./bitcoind -datadir=/home/blkchprj/bitcoin-git/nodes/node0 -conf=/home/blkchprj/bitcoin-git/nodes/node0/bitcoin.conf -port=18100 -rpcport=9100
 
-./bitcoind -datadir=/home/blkchprj/bitcoin-git/nodes/node0 -conf=/home/blkchprj/bitcoin-git/nodes/node0/bitcoin.conf -port=18101 -rpcport=9101
+./bitcoind -conf=/home/blkchprj/bitcoin-git/nodes/node0/bitcoin.conf
 
 ./bitcoind -conf=/home/blkchprj/bitcoin-git/nodes/node0/bitcoin.conf
 ./bitcoind -conf=/home/blkchprj/bitcoin-git/nodes/node1/bitcoin.conf
+
+
+kill -2 $(pidof bitcoind)
