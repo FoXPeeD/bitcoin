@@ -8,7 +8,7 @@ import time
 
 # parameters
 num_clients = 3
-utxo_size = 200
+utxo_size = 20
 debug = 1
 
 # constants
