@@ -5,19 +5,37 @@ import shutil
 import subprocess
 import shlex
 import time
-
-# parameters
-num_clients = 3
-utxo_size = 20
-debug = 1
+import math
 
 # constants
+DEFAULT_DB_CHACHE_SIZE_MB = 4
 TX_DEFAULT_SENT_AMOUNT = 0.0001
-TX_NUMBER_MAX_IN_BLOCK = 10
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 LOCAL_HOST = '127.0.0.1'
+TYPICAL_TX_SIZE_BYTES = 244
+TYPICAL_UTXO_SIZE_BYTES = 77
+BYTES_IN_MB = 1000000
 
+if len(sys.argv) < 4:
+	print('wrong number of arguments')
+	sys.stderr.write("wrong number of arguments\n")
+	sys.stderr.write("usage:\n")
+	sys.stderr.write("1: block size in MB\n")
+	sys.stderr.write("2: percentage of utxo size from dbcache\n")
+	sys.stderr.write("3: number of clients\n")
+	sys.exit(1)
+
+
+
+# parameters
+# num_clients = 3
+num_clients = int((sys.argv[3]))
+# block_size_MB = 0.025
+block_size_MB = float(sys.argv[1])
+debug = 1
+# utxo_size_of_db_cache_size_percentage = 0.1
+utxo_size_of_db_cache_size_percentage = float(sys.argv[2])
 
 delim = '/'
 parentDirPath = os.getcwd() + '/'
@@ -79,7 +97,7 @@ def debugPrint(string):
 	if debug == 1:
 		print(string)
 
-def debugPrintNNewLine(string):
+def debugPrintNewLine(string):
 	if debug == 1:
 		print(string, end='', flush=True)
 
@@ -92,7 +110,8 @@ confDefault = [
 	'dbcache=50',
 	'whitelist=127.0.0.1',
 	'node_dir_placeholder',
-	'blocknotify=python3.7 ' + parentDirPath + 'block.py %s'
+	'blocknotify=python3.7 ' + parentDirPath + 'block.py %s',
+	'blocksonly=0'
 ]
 
 confRegtest = [
@@ -125,61 +144,71 @@ os.mkdir(nodesPath)
 os.chdir(nodesPath)
 for node in range(0, num_clients):
 	os.mkdir('node' + str(node))
+	os.mkdir('node' + str(node) + '/blocks/')
+
+####### make data dir if not found
+os.chdir(parentDirPath+'../')
+if 'data_dirs' not in os.listdir():
+	os.mkdir('data_dirs')
+os.chdir(nodesPath + '/../data_dirs/')
+utxo_size_MB = DEFAULT_DB_CHACHE_SIZE_MB * (utxo_size_of_db_cache_size_percentage / 100)
+utxo_set_size = math.floor((utxo_size_MB * BYTES_IN_MB) / TYPICAL_UTXO_SIZE_BYTES)
+print('utxo set size is ' + str(utxo_set_size))
+print('utxo set size in MB is ' + str(utxo_size_MB))
+
+MAX_TX_IN_BLOCK = math.floor((block_size_MB * BYTES_IN_MB) / TYPICAL_TX_SIZE_BYTES)
+print('Txs in block is ' + str(MAX_TX_IN_BLOCK))
+print('block size in MB is ' + str(block_size_MB))
+
+dataDir = 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB)
+if dataDir not in os.listdir():
+	makeDirCmdArgs = [
+		'python3.7',
+		'create_starting_blockchain.py',
+		str(block_size_MB),
+		str(utxo_size_of_db_cache_size_percentage)
+	]
+	os.chdir(parentDirPath)
+	print('running create_starting_blockchain.py script')
+	makeDirRes = subprocess.run(makeDirCmdArgs, capture_output=False)
+	exitWithMessageIfError(makeDirRes.stderr, None, 'Error making data dir')
 
 
-####### create starting blockchain
-# print('creating starting block')
-# # create directory
-# os.chdir(nodesPath)
-# if 'starting_chain_node' in os.listdir():
-# 	shutil.rmtree('starting_chain_node')
-# os.mkdir('starting_chain_node')
+####### move data to directories of nodes
+os.chdir(nodesPath)
+for node in range(0, num_clients):
+	nodeDir = nodesPath + "node" + str(node)
+	cpCmdArgs=[
+		'cp',
+		'-rf',
+		nodeDir + '/../../data_dirs/' + 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB) + '/regtest/',
+		nodeDir + '/regtest/'
+	]
+	cpRes=subprocess.run(cpCmdArgs, capture_output=True)
+	exitWithMessageIfError(cpRes.stderr, None, 'Error moving dirs')
 
-# create and make conf file
-# os.chdir(binPath)
-# node = -1
-# confThisNode = confDefault.copy()
-# confThisNodeRegTest = confRegtest.copy()
-# nodeDir = nodesPath + "starting_chain_node"
-# confThisNode[7] = 'datadir=' + nodeDir
-# confThisNode[8] = 'loadblock=' + nodeDir + 'regtest/blocks/blk00000.dat'
-# port = BASE_PORT_NUM + node
-# confThisNodeRegTest[0] = 'port=' + str(port)
-# rpcport = BASE_RPC_PORT_NUM + node
-# confThisNodeRegTest[1] = 'rpcport=' + str(rpcport)
-# confFilePath = nodeDir + delim + "bitcoin.conf"
-# contentDefault = '\n'.join(confThisNode)
-# contentRegTest = '\n'.join(confThisNodeRegTest)
-# with open(confFilePath, "w") as text_file:
-# 	text_file.write(contentDefault)
-# 	text_file.write('\n\n[regtest]\n')
-# 	text_file.write(contentRegTest)
-
-#run bitcoind
-# bitcoindCmdArgs[1] = '-conf=' + confFilePath
-# btcStartingChain = subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-# debugPrint("	started bitcoind of starting chain node")
-#
-# debugPrint("	waiting for client to finish setup...")
-# time.sleep(5)
-# initCmdArgs = cliCmdArgs.copy()
-# initCmdArgs[3] = '-rpcport=' + str(rpcport)
-
-
-
-
-
-
-
-
+####### remove sent Tx data from non-miner nodes
+os.chdir(nodesPath)
+for node in range(1, num_clients):
+	nodeDir = nodesPath + "node" + str(node)
+	rmCmdArgs=[
+		'rm',
+		nodeDir + '/regtest/mempool.dat'
+	]
+	rmRes=subprocess.run(rmCmdArgs, capture_output=True)
+	exitWithMessageIfError(rmRes.stderr, None, 'Error removing mempool.dat')
 
 print('running nodes...')
-####### run clients
+# make conf files and start clients
 os.chdir(binPath)
 btcClients = []
 for node in range(0, num_clients):
 	nodeDir = nodesPath + "node" + str(node)
 	confDefault[7] = 'datadir=' + nodeDir
+	if node == 0:
+		confDefault[9] = 'blocksonly=0'
+	else:
+		confDefault[9] = 'blocksonly=1'
 	port = BASE_PORT_NUM + node
 	confRegtest[0] = 'port=' + str(port)
 	rpcport = BASE_RPC_PORT_NUM + node
@@ -198,75 +227,37 @@ for node in range(0, num_clients):
 		text_file.write(content)
 		text_file.write('\n\n[regtest]\n')
 		text_file.write(contentRegTest)
-
 	btcClients.append(subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT))
+	print(bitcoindCmdArgs)
 	debugPrint("	started bitcoind, pid: " + str(btcClients[node].pid))
 time.sleep(5)
 
+input('press enter to start timing')
+
 print('setting up miner node...' )
 initCmdArgs = cliCmdArgs.copy()
-initCmdArgs[3] = '-rpcport=' + str(BASE_RPC_PORT_NUM + 0) # node 0 will be the miner
-
-# generate blocks for funds
-genInitCmdArgs = initCmdArgs.copy()
-genInitCmdArgs.append('generate')
-genInitCmdArgs.append('101')
-genInitRet = subprocess.run(genInitCmdArgs, capture_output=True)
-exitWithMessageIfError(genInitRet.stderr, btcClients, 'Error getting address')
-debugPrint("	generated 101 Initial blocks")
-
-# get address for Txs
-GetAddressCmdArgs = initCmdArgs.copy()
-GetAddressCmdArgs.append('getnewaddress')
-getAddrRet = subprocess.run(GetAddressCmdArgs, capture_output=True)
-exitWithMessageIfError(getAddrRet.stderr, btcClients, 'Error getting address')
-addressStr = getAddrRet.stdout.decode("utf-8").split()[0]
-debugPrint("	got address " + addressStr)
-
-t0 = time.time()
-# send Txs
-TxCmdArgs = initCmdArgs.copy()
-TxCmdArgs.append('sendtoaddress')
-TxCmdArgs.append(addressStr)
-TxCmdArgs.append('amount_placeholder') # amount
-genInitCmdArgs[5] = '1' # change command's number of generated blocks to 1
-
-for txNum in range(0, utxo_size):
-	TxCmdArgs[len(TxCmdArgs)-1] = str(TX_DEFAULT_SENT_AMOUNT)
-	sendTxRet = subprocess.run(TxCmdArgs, capture_output=True)
-	exitWithMessageIfError(sendTxRet.stderr, btcClients, "Error sending Txs, failed on tx number " + str(txNum))
-	debugPrintNNewLine('.')
-	if ((txNum+1) % 100) == 0:
-		debugPrint('')
-		debugPrint('sent 100 Txs')
-	if ((txNum+1) % TX_NUMBER_MAX_IN_BLOCK) == 0 and txNum != 0:
-		genRet = subprocess.run(genInitCmdArgs, capture_output=True)
-		exitWithMessageIfError(genRet.stderr, btcClients, "Error generating block number " + str(txNum / TX_NUMBER_MAX_IN_BLOCK))
-genLastRet = subprocess.run(genInitCmdArgs, capture_output=True)
-exitWithMessageIfError(genLastRet.stderr, btcClients, "Error generating last block, number:" + str(txNum / TX_NUMBER_MAX_IN_BLOCK))
-bestBlockHashMiner = genLastRet.stdout.decode("utf-8").split()[1] # best block hash of miner node
-debugPrint('')
-debugPrint("	sent all Txs")
-timeTook = time.time() - t0
-print(str(utxo_size) + ' Txs took ' + str(timeTook) + ' (avg '  + str(timeTook/utxo_size) + ' sec per Tx)')
-print('finished generating initial chain')
+initCmdArgs[3] = '-rpcport=' + str(BASE_RPC_PORT_NUM) # node 0 will be the miner
 
 # make sure all node are synced getbestblockhash
 bestBlockCmdArgs = initCmdArgs.copy()
 bestBlockCmdArgs.append('getbestblockhash')
-allSynced = False
-while not allSynced:
-	allSynced = True
-	for node in range(1, num_clients):
-		rpcport = BASE_RPC_PORT_NUM + node
-		bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
-		bestBlockRet = subprocess.run(bestBlockCmdArgs, capture_output=True)
-		exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting address')
-		bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
-		if bestBlockHashThisNode != bestBlockHashMiner:
-			allSynced = False
-			time.sleep(0.5) # wait a bit and start over
-			break
+node = 0
+rpcport = BASE_RPC_PORT_NUM + node
+bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
+bestBlockRet = subprocess.run(bestBlockCmdArgs, capture_output=True)
+exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting miner node best block hash')
+bestBlockHashMinerNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
+
+for node in range(1, num_clients):
+	rpcport = BASE_RPC_PORT_NUM + node
+	bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
+	bestBlockRet = subprocess.run(bestBlockCmdArgs, capture_output=True)
+	exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting node best block hash')
+	bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
+	if bestBlockHashThisNode != bestBlockHashMinerNode:
+		for btcClients in process:
+				btcClients.terminate()
+		sys.exit("nodes' blockchain are not synced")
 debugPrint("	all node are synced")
 
 
@@ -277,9 +268,11 @@ startTime = time.time()
 
 # generate block for timing
 generateCmdArgs = cliCmdArgs.copy()
+rpcport = BASE_RPC_PORT_NUM + 0
+generateCmdArgs[3] = '-rpcport=' + str(rpcport)
 generateCmdArgs.append('generate')  # cmd
 generateCmdArgs.append('1')  # amount
-generateRet = subprocess.run(genInitCmdArgs, capture_output=True)
+generateRet = subprocess.run(generateCmdArgs, capture_output=True)
 exitWithMessageIfError(generateRet.stderr, btcClients, 'Error generating block for timing')
 print('generated block for timing')
 
