@@ -11,4 +11,7 @@
 ./bitcoind -conf=/home/blkchprj/bitcoin-git/nodes/node1/bitcoin.conf
 
 
+python3.7 make_setup_test.py 0.1 0.02 4
+
+
 kill -2 $(pidof bitcoind)

@@ -6,8 +6,6 @@ import subprocess
 import shlex
 import time
 import math
-import paramiko
-import boto3
 
 # constants
 DEFAULT_DB_CHACHE_SIZE_MB = 4
@@ -18,7 +16,6 @@ LOCAL_HOST = '127.0.0.1'
 TYPICAL_TX_SIZE_BYTES = 244
 TYPICAL_UTXO_SIZE_BYTES = 77
 BYTES_IN_MB = 1000000
-debug = 1
 
 if len(sys.argv) < 4:
 	print('wrong number of arguments')
@@ -29,6 +26,16 @@ if len(sys.argv) < 4:
 	sys.stderr.write("3: number of clients\n")
 	sys.exit(1)
 
+
+
+# parameters
+# num_clients = 3
+num_clients = int((sys.argv[3]))
+# block_size_MB = 0.025
+block_size_MB = float(sys.argv[1])
+debug = 1
+# utxo_size_of_db_cache_size_percentage = 0.1
+utxo_size_of_db_cache_size_percentage = float(sys.argv[2])
 
 delim = '/'
 parentDirPath = os.getcwd() + '/'
@@ -90,46 +97,9 @@ def debugPrint(string):
 	if debug == 1:
 		print(string)
 
-
 def debugPrintNewLine(string):
 	if debug == 1:
 		print(string, end='', flush=True)
-
-
-def get_instances_IDs(instances):
-	ids = []
-	for ins in instances:
-		ids.append(ins.id)
-	return ids
-
-
-def get_instances_private_IPs(instances):
-	IPs = []
-	for ins in instances:
-		IPs.append(ins.private_ip_address)
-	return IPs
-
-
-def terminate_instances(instances):
-	inst_ids = get_instances_IDs(instances)
-	ec2 = boto3.client('ec2')
-	try:
-		ec2.terminate_instances(InstanceIds=inst_ids, DryRun=False)
-	except ClientError as e:
-		print(e)
-
-
-def run_cmd(instance_ip, cmd):
-	ssh = paramiko.SSHClient()
-	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-	print(instance_ip)
-	ssh.connect(instance_ip, username='ubuntu',
-				key_filename=KEYFILE)
-	# print("Executing " + cmd)
-	stdin, stdout, stderr = ssh.exec_command(cmd)
-	# print(stdout.readlines())
-	ssh.close()
-
 
 confDefault = [
 	'regtest=1',
@@ -147,7 +117,7 @@ confDefault = [
 confRegtest = [
 	'port_placeholder',
 	'rpc_port_placeholder'
-	]
+    ]
 
 
 bitcoindCmdArgs = [
@@ -163,23 +133,18 @@ cliCmdArgs = [
 	]
 
 
-####### get parameters and check them
-# num_clients = 3
-num_clients = int((sys.argv[3]))
-if num_clients < 2:
-	sys.stderr.write("number of clients must be greater than 1\n")
-	sys.exit(1)
-# block_size_MB = 0.025
-block_size_MB = float(sys.argv[1])
-if ((block_size_MB*BYTES_IN_MB)/TYPICAL_TX_SIZE_BYTES) < 1:
-	sys.stderr.write("block size is too small\n")
-	sys.exit(1)
-# utxo_size_of_db_cache_size_percentage = 0.1
-utxo_size_of_db_cache_size_percentage = float(sys.argv[2])
-if utxo_size_of_db_cache_size_percentage < 0:
-	sys.stderr.write("UTXO size must be non-negative\n")
-	sys.exit(1)
+####### clean data directories of nodes
+os.chdir(parentDirPath+'../')
+if 'nodes' in os.listdir():
+	shutil.rmtree('nodes')
+os.mkdir(nodesPath)
 
+
+####### create data directories of nodes
+os.chdir(nodesPath)
+for node in range(0, num_clients):
+	os.mkdir('node' + str(node))
+	os.mkdir('node' + str(node) + '/blocks/')
 
 ####### make data dir if not found
 os.chdir(parentDirPath+'../')
@@ -208,57 +173,6 @@ if dataDir not in os.listdir():
 	makeDirRes = subprocess.run(makeDirCmdArgs, capture_output=False)
 	exitWithMessageIfError(makeDirRes.stderr, None, 'Error making data dir')
 
-instances_list = []
-####### Create AWS instances:
-for inst in range(0, num_clients):
-	try:
-		inst_num_str = str(inst).zfill(2)
-		key_val = 'ttis-inst_' + inst_num_str
-		intra_ip_addr = '10.0.2.1' + inst_num_str
-		instance = ec2_rec.create_instances(
-			ImageId='ami-0a52acf469d39b2ce',
-			InstanceType='t2.micro',
-			KeyName='aws_project_key',
-			MaxCount=1,
-			MinCount=1,
-			TagSpecifications=[
-				{
-					'ResourceType': 'instance',
-					'Tags': [
-						{
-							'Key': 'Name',
-							'Value': key_val
-						},
-					]
-				},
-			],
-			NetworkInterfaces=[
-				{"DeviceIndex": 0,
-				"SubnetId": "subnet-08db8bec756dcb30a",
-				"PrivateIpAddress": intra_ip_addr,
-				"Groups": ['sg-06523c97735030cf4'],
-				}
-			],
-			)
-		instances_list.append(instance)
-	except Exception as e:
-		print(e)
-		terminate_instances(instances_list)
-		sys.exit(1)
-
-
-####### clean data directories of nodes
-os.chdir(parentDirPath+'../')
-if 'nodes' in os.listdir():
-	shutil.rmtree('nodes')
-os.mkdir(nodesPath)
-
-
-####### create data directories of nodes
-os.chdir(nodesPath)
-for node in range(0, num_clients):
-	os.mkdir('node' + str(node))
-	os.mkdir('node' + str(node) + '/blocks/')
 
 ####### move data to directories of nodes
 os.chdir(nodesPath)

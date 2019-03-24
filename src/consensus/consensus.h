@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 /** The maximum allowed size for a serialized block, in bytes (only for buffer size limits) */
-static const unsigned int PROJECT_BLOCK_SIZE_LIMIT_FACTOR = 4;
+static const unsigned int PROJECT_BLOCK_SIZE_LIMIT_FACTOR = 16;
 
 /** The maximum allowed size for a serialized block, in bytes (only for buffer size limits) */
 static const unsigned int MAX_BLOCK_SERIALIZED_SIZE = 4000000 * PROJECT_BLOCK_SIZE_LIMIT_FACTOR;

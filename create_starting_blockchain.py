@@ -96,9 +96,11 @@ def debugPrint(string):
 	if debug == 1:
 		print(string)
 
+
 def debugPrintNewLine(string):
 	if debug == 1:
 		print(string, end='', flush=True)
+
 
 confDefault = [
 	'regtest=1',
@@ -116,7 +118,7 @@ confDefault = [
 confRegtest = [
 	'port_placeholder',
 	'rpc_port_placeholder'
-    ]
+	]
 
 
 bitcoindCmdArgs = [
