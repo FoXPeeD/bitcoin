@@ -36,7 +36,6 @@ nodesPath = localBaseDirPath + '../nodes/'
 localBinPath = localBaseDirPath + 'src/'
 bitcoindFileName = './bitcoind'
 bitcoin_cliFileName = './bitcoin-cli'
-
 remoteBaseDirPath = '~/project/'
 remoteDataDirPath = remoteBaseDirPath + 'dataDir/'
 remoteBinPath = remoteBaseDirPath + 'bitcoin/src/'
