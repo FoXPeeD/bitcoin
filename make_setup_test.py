@@ -31,11 +31,15 @@ if len(sys.argv) < 4:
 
 
 delim = '/'
-parentDirPath = os.getcwd() + '/'
-nodesPath = parentDirPath + '../nodes/'
-binPath = parentDirPath + 'src/'
+localBaseDirPath = os.getcwd() + '/'
+nodesPath = localBaseDirPath + '../nodes/'
+localBinPath = localBaseDirPath + 'src/'
 bitcoindFileName = './bitcoind'
 bitcoin_cliFileName = './bitcoin-cli'
+
+remoteBaseDirPath = '~/project/'
+remoteDataDirPath = remoteBaseDirPath + 'dataDir/'
+remoteBinPath = remoteBaseDirPath + 'bitcoin/src/'
 
 
 ####### helper functions
@@ -140,7 +144,7 @@ confDefault = [
 	'dbcache=50',
 	'whitelist=127.0.0.1',
 	'node_dir_placeholder',
-	'blocknotify=python3.7 ' + parentDirPath + 'block.py %s',
+	'blocknotify=python3.7 ' + localBaseDirPath + 'block.py %s',
 	'blocksonly=0'
 ]
 
@@ -182,7 +186,7 @@ if utxo_size_of_db_cache_size_percentage < 0:
 
 
 ####### make data dir if not found
-os.chdir(parentDirPath+'../')
+os.chdir(localBaseDirPath+'../')
 if 'data_dirs' not in os.listdir():
 	os.mkdir('data_dirs')
 os.chdir(nodesPath + '/../data_dirs/')
@@ -203,7 +207,7 @@ if dataDir not in os.listdir():
 		str(block_size_MB),
 		str(utxo_size_of_db_cache_size_percentage)
 	]
-	os.chdir(parentDirPath)
+	os.chdir(localBaseDirPath)
 	print('running create_starting_blockchain.py script')
 	makeDirRes = subprocess.run(makeDirCmdArgs, capture_output=False)
 	exitWithMessageIfError(makeDirRes.stderr, None, 'Error making data dir')
@@ -286,7 +290,7 @@ for node in range(1, num_clients):
 
 print('running nodes...')
 # make conf files and start clients
-os.chdir(binPath)
+os.chdir(localBinPath)
 btcClients = []
 for node in range(0, num_clients):
 	nodeDir = nodesPath + "node" + str(node)
@@ -348,7 +352,7 @@ debugPrint("	all node are synced")
 
 
 # start script for timing
-serverProc = subprocess.Popen(['python3.7', parentDirPath + 'server.py', str(num_clients)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+serverProc = subprocess.Popen(['python3.7', localBaseDirPath + 'server.py', str(num_clients)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 startTime = time.time()
 
 
@@ -375,7 +379,7 @@ while serverProc.poll() is None:
 
 print('server finished')
 # printProcessOutput(serverProc)
-with open(parentDirPath + 'time.txt') as f:
+with open(localBaseDirPath + 'time.txt') as f:
 	timeGot= f.read()
 	debugPrint('times:\n' + str(timeGot))
 
