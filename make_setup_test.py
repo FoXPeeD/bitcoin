@@ -66,7 +66,7 @@ def printProcessOutput(proc):
 	printByteStreamErr(err, 'd')
 
 
-def errorReturned(stream):
+def localErrorReturned(stream):
 	if stream is None:
 		return False
 	errStrListSet = set(stream.decode("utf-8").split('\n'))
@@ -76,19 +76,31 @@ def errorReturned(stream):
 		return True
 
 
-def exitWithMessageIfError(stream, process, errString):
+# def exitWithMessageIfError(stream, process, errString):
+	# if localErrorReturned(stream):
+		# print('Error received:')
+		# print(stream.decode("utf-8"))
+		# if process is not None:
+			# if isinstance(process, list):
+				# for proc in process:
+					# proc.terminate()
+			# else:
+				# process.terminate()
+		# sys.exit(errString)
+		
+def exitWithMessageIfError(stream, instances, errString):
 	if errorReturned(stream):
 		print('Error received:')
-		print(stream.decode("utf-8"))
-		if process is not None:
-			if isinstance(process, list):
-				for proc in process:
-					proc.terminate()
+		print(stream)
+		if instances is not None:
+			if isinstance(instances, list):
+				for instance in instances:
+					instance.terminate()
 			else:
-				process.terminate()
+				instances.terminate()
 		sys.exit(errString)
 
-
+terminate_instances(instances_list)
 def debugPrint(string):
 	if debug == 1:
 		print(string)
@@ -210,6 +222,7 @@ if dataDir not in os.listdir():
 	print('running create_starting_blockchain.py script')
 	makeDirRes = subprocess.run(makeDirCmdArgs, capture_output=False)
 	exitWithMessageIfError(makeDirRes.stderr, None, 'Error making data dir')
+	#TODO: tar files to 'all' and 'no-mempool'
 
 instances_list = []
 ####### Create AWS instances:
@@ -249,6 +262,7 @@ for inst in range(0, num_clients):
 		terminate_instances(instances_list)
 		sys.exit(1)
 
+#TODO: wait for instances to finish loading
 
 ####### clean data directories of nodes
 os.chdir(parentDirPath+'../')
