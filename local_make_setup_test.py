@@ -107,7 +107,7 @@ confDefault = [
 	'rpcpassword=rpc',
 	'server=1',
 	'listen=1',
-	'dbcache=50',
+	'dbcache=4',
 	'whitelist=127.0.0.1',
 	'node_dir_placeholder',
 	'blocknotify=python3.7 ' + parentDirPath + 'block.py %s',
@@ -178,7 +178,7 @@ if dataDir not in os.listdir():
 os.chdir(nodesPath)
 for node in range(0, num_clients):
 	nodeDir = nodesPath + "node" + str(node)
-	cpCmdArgs=[
+	cpCmdArgs = [
 		'cp',
 		'-rf',
 		nodeDir + '/../../data_dirs/' + 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB) + '/regtest/',
@@ -191,11 +191,11 @@ for node in range(0, num_clients):
 os.chdir(nodesPath)
 for node in range(1, num_clients):
 	nodeDir = nodesPath + "node" + str(node)
-	rmCmdArgs=[
+	rmCmdArgs = [
 		'rm',
 		nodeDir + '/regtest/mempool.dat'
 	]
-	rmRes=subprocess.run(rmCmdArgs, capture_output=True)
+	rmRes = subprocess.run(rmCmdArgs, capture_output=True)
 	exitWithMessageIfError(rmRes.stderr, None, 'Error removing mempool.dat')
 
 print('running nodes...')
@@ -262,7 +262,14 @@ debugPrint("	all node are synced")
 
 
 # start script for timing
-serverProc = subprocess.Popen(['python3.7', parentDirPath + 'server.py', str(num_clients)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+serverCmdArgs = [
+	'python3.7',
+	parentDirPath + 'server.py',
+	str(num_clients),
+	parentDirPath + '../'
+]
+print(parentDirPath + '../')
+serverProc = subprocess.Popen(serverCmdArgs, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 startTime = time.time()
 
 
@@ -278,9 +285,9 @@ print('generated block for timing')
 
 # wait until server is done timing (all nodes got block)
 while serverProc.poll() is None:
-	if (time.time() - startTime) > 15:	#
+	if (time.time() - startTime) > 15:
 		print('server took too much time to finish')
-		for node in range(0,num_clients):
+		for node in range(0, num_clients):
 			btcClients[node].terminate()
 			serverProc.terminate()
 		exit(0)
@@ -289,13 +296,13 @@ while serverProc.poll() is None:
 
 print('server finished')
 # printProcessOutput(serverProc)
-with open(parentDirPath + 'time.txt') as f:
-	timeGot= f.read()
+with open(parentDirPath + '../time.txt') as f:
+	timeGot = f.read()
 	debugPrint('times:\n' + str(timeGot))
 
 
 input("Press Enter to terminate")
-for node in range(0,num_clients):
+for node in range(0, num_clients):
 	btcClients[node].terminate()
 print("terminated")
 

@@ -4,9 +4,17 @@ import socket
 import time
 import sys
 
-print('serever start')
+print('server start')
 
-timeFilePath =  os.getcwd() + '/../time.txt'
+if len(sys.argv) < 3:
+	print('wrong number of arguments')
+	sys.stderr.write("wrong number of arguments\n")
+	sys.stderr.write("usage:\n")
+	sys.stderr.write("1: number of nodes\n")
+	sys.stderr.write("2: directory where results will be written into file (time.txt) \n")
+	sys.exit(1)
+
+
 # next create a socket object
 s = socket.socket()
 #print "Socket successfully created"
@@ -31,16 +39,18 @@ s.listen()
 # an error occurs 
 counter = 0
 expected_connections = int(sys.argv[1])
+# timeFilePath =  os.getcwd() + '/../time.txt'
+timeFilePath = sys.argv[2] + 'time.txt'
 while True:
 # Establish connection with client.
 	c, addr = s.accept()
 	if counter == 0:
 		# start clock
 		t0 = time.time()
-		print(str(counter) + ',' + str(0), file=open(timeFilePath,'w'))
+		print(str(counter) + ',' + str(0), file=open(timeFilePath, 'w'))
 	else:
 		t1 = time.time()
-		print(str(counter) + ',' + str(t1-t0), file=open(timeFilePath,'a'))
+		print(str(counter) + ',' + str(t1-t0), file=open(timeFilePath, 'a'))
 	counter = counter + 1
 	if counter == expected_connections:
 		break

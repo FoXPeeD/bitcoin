@@ -10,8 +10,8 @@ import math
 # constants
 DEFAULT_DB_CHACHE_SIZE_MB = 4
 TX_DEFAULT_SENT_AMOUNT = 0.0001
-BASE_PORT_NUM = 18100
-BASE_RPC_PORT_NUM = 9100
+BASE_PORT_NUM = 18200
+BASE_RPC_PORT_NUM = 9200
 LOCAL_HOST = '127.0.0.1'
 TYPICAL_TX_SIZE_BYTES = 244
 TYPICAL_UTXO_SIZE_BYTES = 77
@@ -184,7 +184,7 @@ with open(confFilePath, "w") as text_file:
 	text_file.write('\n\n[regtest]\n')
 	text_file.write(contentRegTest)
 
-#run bitcoind
+# run bitcoind
 bitcoindCmdArgs[1] = '-conf=' + confFilePath
 btcStartingChain = subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 debugPrint("	started bitcoind of starting chain node")
@@ -235,6 +235,7 @@ for txNum in range(0, utxo_set_size):
 		genRet = subprocess.run(genInitCmdArgs, capture_output=True)
 		exitWithMessageIfError(genRet.stderr, btcStartingChain, "Error generating block number " + str(txNum / MAX_TX_IN_BLOCK))
 		# printByteStreamOut(genRet.stdout, 'd') # print block hash
+genInitCmdArgs[5] = '7'  # change command's number of generated blocks to 6 (for all Txs to be considered confirmed)
 genLastRet = subprocess.run(genInitCmdArgs, capture_output=True)
 exitWithMessageIfError(genLastRet.stderr, btcStartingChain, "Error generating last block, number:" + str(txNum / MAX_TX_IN_BLOCK))
 bestBlockHashMiner = genLastRet.stdout.decode("utf-8").split()[1] # best block hash of miner node
@@ -259,7 +260,7 @@ for txNum in range(0, MAX_TX_IN_BLOCK):
 	# printByteStreamOut(sendTxRet.stdout, 'd') # print Tx hashes
 	debugPrintNewLine('.')
 	if ((txNum+1) % 100) == 0:
-		debugPrint('\nsent 100 Txs')
+		debugPrint('\nsent 100 Txs, ' + str(txNum+1) + ' in total')
 debugPrint("\n	sent all Txs")
 timeTook = time.time() - t1
 debugPrint('\n')
@@ -267,13 +268,16 @@ print(str(utxo_set_size) + ' of waiting Txs took ' + str(timeTook) + ' (avg '  +
 print('finished generating initial chain')
 
 
-btcStartingChain.terminate()
-time.sleep(1) # give client time to close properly before copying
-print("bitcoind terminated")
+stopCmdArgs = initCmdArgs.copy()
+stopCmdArgs.append('stop')
+stopRet = subprocess.run(stopCmdArgs, capture_output=True)
+exitWithMessageIfError(stopRet.stderr, btcStartingChain, "Error sending Txs, failed on tx number " + str(txNum))
+time.sleep(10)  # give client time to close properly before copying
+print("bitcoind stopped")
 
 
 # copy directory.
-cpCmdArgs=[
+cpCmdArgs = [
 	'cp',
 	'-rf',
 	nodeDir,

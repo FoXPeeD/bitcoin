@@ -9,14 +9,15 @@ import time
 import math
 import paramiko
 import boto3
-import paramiko
 from scp import SCPClient
+from datetime import datetime
+from datetime import timedelta
 
 # constants
 DEFAULT_DB_CHACHE_SIZE_MB = 4
 TX_DEFAULT_SENT_AMOUNT = 0.0001
-BASE_PORT_NUM = 18100
-BASE_RPC_PORT_NUM = 9100
+BASE_PORT_NUM = 18200
+BASE_RPC_PORT_NUM = 9200
 LOCAL_HOST = '127.0.0.1'
 PRIVATE_IP_PREFIX = '10.0.2.1'
 TYPICAL_TX_SIZE_BYTES = 244
@@ -24,6 +25,7 @@ TYPICAL_UTXO_SIZE_BYTES = 77
 BYTES_IN_MB = 1000000
 TAR_FILE_FULL_NAME = 'data-full.tar.gz'
 TAR_FILE_NO_MEMPOOL_NAME = 'data-no-mempool.tar.gz'
+EMPTY_LIST = []
 debug = 1
 
 if len(sys.argv) < 4:
@@ -42,7 +44,7 @@ nodesPath = localBaseDirPath + '../nodes/'
 localBinPath = localBaseDirPath + 'src/'
 bitcoindFileName = './bitcoind'
 bitcoin_cliFileName = './bitcoin-cli'
-remoteBaseDirPath = '~/project/'
+remoteBaseDirPath = '/home/ubuntu/project/'
 remoteDataDirPath = remoteBaseDirPath + 'dataDir/'
 remoteBinPath = remoteBaseDirPath + 'bitcoin/src/'
 KEYFILE = localBaseDirPath + '../itzik_test_key_aws.pem'  # TODO: change to project key
@@ -122,9 +124,8 @@ def get_instances_IDs(instances):
 def get_instances_public_IPs(instances):
 	IPs = []
 	ec2 = boto3.client('ec2')
-	print('.')
-	for id in instances:
-		dnsName = ec2.describe_instances(InstanceIds=[id])['Reservations'][0]['Instances'][0]['PublicIpAddress']
+	for inst_id in instances:
+		dnsName = ec2.describe_instances(InstanceIds=[inst_id])['Reservations'][0]['Instances'][0]['PublicIpAddress']
 		IPs.append(dnsName)
 	return IPs
 
@@ -139,37 +140,56 @@ def terminate_instances(instances):
 		print(e)
 
 
-def run_cmd(instance_ip, cmd):
+def run_cmd(instance_ip, cmd, time_out=None):
 	ssh = paramiko.SSHClient()
 	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-	print('cmd - IP: ' + instance_ip)
-	ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE)
+	# print('cmd - IP: ' + instance_ip)
+	if time_out is None:
+		ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE, timeout=time_out)
+	else:
+		ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE)
 	# print("Executing " + cmd)
 	stdin, stdout, stderr = ssh.exec_command(cmd)
-	print(stdout.readlines())
-	print(stderr.readlines())
+	stdoutStr = stdout.readlines()
 	ssh.close()
-	return [stdout, stderr]
+	if stderr.readlines() != EMPTY_LIST:
+		print('Error for the cmd "' + cmd + '":')
+		print(stderr.readlines())
+		print('Exiting')
+		terminate_instances(instances_list)
+	return stdoutStr
 
 
 def send_file_to_ip(instance_ip, localFile, remotePath):
 	ssh = paramiko.SSHClient()
 	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-	print('scp - IP: ' + instance_ip)
+	# print('scp - IP: ' + instance_ip)
 	ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE)
-	print("copying  " + localFile)
+	# print("copying  " + localFile)
 	scpConnection = SCPClient(ssh.get_transport())
 	scpConnection.put(localFile, remotePath)
 	scpConnection.close()
 	ssh.close()
 
 
+def get_file_from_ip(instance_ip, remoteFile, localPath):
+	ssh = paramiko.SSHClient()
+	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	# print('scp - IP: ' + instance_ip)
+	ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE)
+	# print("getting remote file:  " + remoteFile)
+	scpConnection = SCPClient(ssh.get_transport())
+	scpConnection.get(remoteFile, localPath)
+	scpConnection.close()
+	ssh.close()
+
+
 def getMeshConnections(nodeNumber, numberOfNodes):
 	connList = []
-	for toNode in range(0, numberOfNodes):
-		if toNode == nodeNumber:
+	for to_node in range(0, numberOfNodes):
+		if to_node == nodeNumber:
 			continue
-		connList.append(toNode)
+		connList.append(to_node)
 	return connList
 
 
@@ -179,26 +199,31 @@ confDefault = [
 	'rpcpassword=rpc',
 	'server=1',
 	'listen=1',
-	'dbcache=50',
+	'dbcache=4',
 	'datadir=' + remoteDataDirPath,
 	'blocknotify=python3.7 ' + remoteBaseDirPath + 'block.py %s',
-	'blocksonly=1'
+	'blocksonly=1',
+	'mempoolexpiry=' + str(math.floor((datetime.now() - datetime(2019, 3, 1))/timedelta(hours=1)))  # default is 2 weeks
 ]
 
-confRegtest = []
+confRegtest = [
+	# 'port=' + str(BASE_PORT_NUM),
+	# 'rpcport=' + str(BASE_RPC_PORT_NUM)
+]
 
 
 bitcoindCmdArgs = [
 	remoteBinPath + bitcoindFileName,
-	'-daemon'
-	'-conf=~/project/bitcoin.conf'
+	'-daemon',
+	'-reindex-chainstate',
+	'-conf=' + remoteBaseDirPath + 'bitcoin.conf'
 	]
 
 cliCmdArgs = [
-	bitcoin_cliFileName,
+	remoteBinPath + bitcoin_cliFileName,
 	'-rpcuser=rpc',
 	'-rpcpassword=rpc',
-	'rpc_port_placeholder'
+	'-rpcport=18443'  # default rpc port for regtest
 	]
 
 
@@ -247,6 +272,7 @@ if dataDirName not in os.listdir('.'):
 	print('running create_starting_blockchain.py script')
 	makeDirRes = subprocess.run(makeDirCmdArgs, capture_output=False)
 	localExitWithMessageIfError(makeDirRes.stderr, None, 'Error making data dir')
+	print('creation of initial blockchain done.\n\n\n')
 
 	# tar all files
 	os.chdir(nodesPath + '/../data_dirs/')
@@ -257,7 +283,7 @@ if dataDirName not in os.listdir('.'):
 		'--exclude=*.conf',
 		dataDirName
 		]
-	tarFullRes = subprocess.run(tarFullCmdArgs, capture_output=False)
+	tarFullRes = subprocess.run(tarFullCmdArgs, capture_output=False, stdout=subprocess.DEVNULL)
 	localExitWithMessageIfError(tarFullRes.stderr, None, 'Error making full tar file')
 	debugPrint('created full tar file')
 
@@ -270,7 +296,7 @@ if dataDirName not in os.listdir('.'):
 		'--exclude=mempool.dat',
 		dataDirName,
 		]
-	tarNoMempoolRes = subprocess.run(tarNoMempoolCmdArgs, capture_output=False)
+	tarNoMempoolRes = subprocess.run(tarNoMempoolCmdArgs, capture_output=False, stdout=subprocess.DEVNULL)
 	localExitWithMessageIfError(tarNoMempoolRes.stderr, None, 'Error making no-mempool tar file')
 	debugPrint('created partial tar file')
 
@@ -293,7 +319,8 @@ for instNum in range(0, num_clients):
 		key_val = 'ttis-inst_' + inst_num_str
 		intra_ip_addr = PRIVATE_IP_PREFIX + inst_num_str
 		inst = ec2_rec.create_instances(
-			ImageId='ami-0a52acf469d39b2ce',
+			ImageId='ami-0b1650b9ad3f7a939',
+			# ImageId='ami-0a52acf469d39b2ce',
 			InstanceType='t2.micro',
 			KeyName='itzik_test_key',  # TODO: change to project key
 			MaxCount=1,
@@ -313,7 +340,7 @@ for instNum in range(0, num_clients):
 				{"DeviceIndex": 0, "SubnetId": "subnet-08db8bec756dcb30a", "PrivateIpAddress": intra_ip_addr, "Groups": ['sg-06523c97735030cf4']}
 			],
 			)
-		# debugPrint('started instance ' + str(instNum))
+		# debugPrint('	started instance ' + str(instNum))
 		instances_list.append(inst[0].id)
 	except Exception as error:
 		print(error)
@@ -323,15 +350,17 @@ for instNum in range(0, num_clients):
 # debugPrint(instances_list)
 # TODO: wait for instances to finish loading
 print('waiting for instances to finish loading...')
-time.sleep(50)
+time.sleep(45)
 instances_public_ips_list = get_instances_public_IPs(instances_list)
 
 ####### clean data directories of nodes
 # for instNum in range(0, num_clients):
 # 	run_cmd(instances_list[instNum].public_ip_address, 'rm -rf ~/project/data_dir')
 
+####### prepare files at instances
+print('preparing data dirs at instances...')
 if dataDirCreated:
-	####### copy tar to remote node
+	# copy tar to remote node
 	for node in range(0, num_clients):
 		if node == 0:
 			localTarFilePath = localBaseDirPath + '../data_dirs/' + TAR_FILE_FULL_NAME
@@ -343,36 +372,62 @@ if dataDirCreated:
 			print(error)
 			terminate_instances(instances_list)
 			sys.exit(0)
-	debugPrint('copied tar files')
+	debugPrint('	copied tar files')
 
-	####### extract tar
+	# extract tar
 	for node in range(0, num_clients):
 		if node == 0:
 			remoteTarFilePath = remoteBaseDirPath + TAR_FILE_FULL_NAME
 		else:
 			remoteTarFilePath = remoteBaseDirPath + TAR_FILE_NO_MEMPOOL_NAME
 		run_cmd(instances_public_ips_list[node], 'tar -xvf ' + remoteTarFilePath + ' -C ' + remoteBaseDirPath)
-	debugPrint('extracted tar files')
+	debugPrint('	extracted tar files')
 
-	####### rename dir
+	# rename dir
 	for node in range(0, num_clients):
 		run_cmd(instances_public_ips_list[node], 'mv ' + remoteBaseDirPath + dataDirName + ' ' + remoteBaseDirPath + 'dataDir')
-	debugPrint('renamed dirs')
+	debugPrint('	renamed dirs')
 
 else:
-	####### copy previously prepared data as data dir
-	print('should have used a previously prepared data')
-	sys.exit(0)
-	for node in range(0, num_clients):
-		run_cmd(instances_list[node].public_ip_address, 'cp ' + remoteBaseDirPath + '/data_dirs/' + dataDirName + ' ' + remoteBaseDirPath + 'dataDir')
-		run_cmd(instances_list[node].public_ip_address, 'rm ' + remoteDataDirPath + '*.conf')
-		if node != 0:
-			run_cmd(instances_list[node].public_ip_address, 'rm ' + remoteDataDirPath + 'regtest/mempool.dat')
 
-input('press enter to terminate')
-terminate_instances(instances_list)
-sys.exit(0)
-print('running nodes...')
+	# print('should have used a previously prepared data')
+	# terminate_instances(instances_list)
+	# os.chdir(nodesPath + '/../data_dirs/')
+	# subprocess.run(['rm', '-rf', dataDirName], capture_output=False)
+	# sys.exit(0)
+
+	# copy previously prepared data as data dir
+	for node in range(0, num_clients):
+		try:
+			run_cmd(instances_public_ips_list[node], 'cp -r ' + remoteBaseDirPath + '/data_dirs/' + dataDirName + ' ' + remoteBaseDirPath + 'dataDir')
+		except Exception as error:
+			print(error)
+			terminate_instances(instances_list)
+			sys.exit(1)
+		run_cmd(instances_public_ips_list[node], 'rm ' + remoteDataDirPath + '*.conf')
+		if node != 0:
+			run_cmd(instances_public_ips_list[node], 'rm ' + remoteDataDirPath + 'regtest/mempool.dat')
+	debugPrint('	copied previously created dataDir from within image')
+
+# copy server.py and block.py scripts
+for node in range(0, num_clients):
+		if node == 0:
+			try:
+				send_file_to_ip(instances_public_ips_list[node], localBaseDirPath + 'server.py', remoteBaseDirPath)
+			except Exception as error:
+				print(error)
+				terminate_instances(instances_list)
+				sys.exit(1)
+		try:
+			send_file_to_ip(instances_public_ips_list[node], localBaseDirPath + 'block.py', remoteBaseDirPath)
+		except Exception as error:
+			print(error)
+			terminate_instances(instances_list)
+			sys.exit(1)
+debugPrint('	copied blocknotify related scripts')
+
+
+print('making conf files and running nodes...')
 # make conf files and start clients
 for node in range(0, num_clients):
 
@@ -383,18 +438,19 @@ for node in range(0, num_clients):
 
 	# create [regtest] section of conf file
 	confThisNodeRegtest = confRegtest.copy()
-
+	# confThisNodeRegtest[0] = 'port=' + str(BASE_PORT_NUM + node)
+	# confThisNodeRegtest[1] = 'rpcport=' + str(BASE_RPC_PORT_NUM + node)
 	nodes_connections_list = getMeshConnections(node, num_clients)
 	for toNode in nodes_connections_list:
+		# confThisNodeRegtest.append('connect=' + PRIVATE_IP_PREFIX + str(toNode).zfill(2) + ':' + str(BASE_PORT_NUM + toNode))
 		confThisNodeRegtest.append('connect=' + PRIVATE_IP_PREFIX + str(toNode).zfill(2))
-
 	# create conf file from sections
 	content = '\n'.join(confThisNode)
 	contentRegTest = '\n'.join(confThisNodeRegtest)
 	confFilePath = localBaseDirPath + '/../bitcoin.conf'
 	with open(confFilePath, "w") as text_file:
 		text_file.write(content)
-		text_file.write('\n\n[regtest]\n' + contentRegTest)
+		text_file.write('\n\n[regtest]\n' + contentRegTest + '\n')
 
 	# send conf file
 	try:
@@ -402,77 +458,81 @@ for node in range(0, num_clients):
 	except Exception as error:
 		print(error)
 		terminate_instances(instances_list)
-		sys.exit(0)
+		sys.exit(1)
 
 	# run bitcoind on remote node
 	runBitcoindCmd = ' '.join(bitcoindCmdArgs)
+	# input('check conf file, press enter to continue')
 	run_cmd(instances_public_ips_list[node], runBitcoindCmd)
 
 print('finished calling bitcoind on remote nodes')
 time.sleep(5)
 
-input('press enter to start timing')
-
-print('setting up miner node...')
-initCmdArgs = cliCmdArgs.copy()
-initCmdArgs[3] = '-rpcport=' + str(BASE_RPC_PORT_NUM)  # node 0 will be the miner
 
 # make sure all node are synced getbestblockhash
-bestBlockCmdArgs = initCmdArgs.copy()
+bestBlockCmdArgs = cliCmdArgs.copy()
 bestBlockCmdArgs.append('getbestblockhash')
-node = 0
-rpcport = BASE_RPC_PORT_NUM + node
-bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
-bestBlockRet = subprocess.run(bestBlockCmdArgs, capture_output=True)
-exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting miner node best block hash')
-bestBlockHashMinerNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
+bestBlockCmd = ' '.join(bestBlockCmdArgs)
+bestBlockRet = run_cmd(instances_public_ips_list[0], bestBlockCmd)
+bestBlockHashMinerNode = bestBlockRet
+# bestBlockHashMinerNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
 
 for node in range(1, num_clients):
-	rpcport = BASE_RPC_PORT_NUM + node
-	bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
-	bestBlockRet = subprocess.run(bestBlockCmdArgs, capture_output=True)
-	exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting node best block hash')
-	bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
+	# rpcport = BASE_RPC_PORT_NUM + node
+	# bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
+	bestBlockRet = run_cmd(instances_public_ips_list[node], bestBlockCmd)
+	bestBlockHashThisNode = bestBlockRet
+	# bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
 	if bestBlockHashThisNode != bestBlockHashMinerNode:
-		for btcClients in process:
-				btcClients.terminate()
+		input('blockchains are not synced, press enter to terminate...')
+		terminate_instances(instances_list)
 		sys.exit("nodes' blockchain are not synced")
 debugPrint("	all node are synced")
 
+input('press enter to start timing')
 
 # start script for timing
-serverProc = subprocess.Popen(['python3.7', localBaseDirPath + 'server.py', str(num_clients)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+print('running server on node 0 (the miner)...')
+runServerCmdArgs = [
+	'python3.7',
+	remoteBaseDirPath + ' server.py ',
+	str(num_clients),
+	remoteBaseDirPath,
+	'&'
+]
+runServerCmd = ' '.join(runServerCmdArgs)
+bestBlockRet = run_cmd(instances_public_ips_list[0], runServerCmd, 15)
 startTime = time.time()
 
 
 # generate block for timing
 generateCmdArgs = cliCmdArgs.copy()
-rpcport = BASE_RPC_PORT_NUM + 0
-generateCmdArgs[3] = '-rpcport=' + str(rpcport)
 generateCmdArgs.append('generate')  # cmd
 generateCmdArgs.append('1')  # amount
-generateRet = subprocess.run(generateCmdArgs, capture_output=True)
-exitWithMessageIfError(generateRet.stderr, btcClients, 'Error generating block for timing')
+generateCmd = ' '.join(generateCmdArgs)
+run_cmd(instances_public_ips_list[0], generateCmd)
 print('generated block for timing')
 
 # wait until server is done timing (all nodes got block)
-while serverProc.poll() is None:
-	if (time.time() - startTime) > 15:
-		print('server took too much time to finish')
-		for node in range(0, num_clients):
-			btcClients[node].terminate()
-			serverProc.terminate()
-		exit(0)
-	else:
-		time.sleep(0.5)
+while True:
+	try:
+		get_file_from_ip(instances_public_ips_list[0], remoteBaseDirPath + 'time.txt', localBaseDirPath + '../')
+	except Exception as error:
+		if (time.time() - startTime) > 15:
+			input("server took too much time to finish, press enter to terminate...")
+			terminate_instances(instances_list)
+			sys.exit("server took too much time to finish")
+		else:
+			time.sleep(0.5)
+			continue
+	break
 
 print('server finished')
-with open(localBaseDirPath + 'time.txt') as f:
+with open(localBaseDirPath + '../time.txt') as f:
 	timeGot = f.read()
-	debugPrint('times:\n' + str(timeGot))
+	debugPrint('	times:\n' + str(timeGot))
 
 
-input("Press Enter to terminate")
-for node in range(0, num_clients):
-	btcClients[node].terminate()
+input("Press Enter to terminate AWS machines")
+terminate_instances(instances_list)
 print("terminated")
