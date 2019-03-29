@@ -1,4 +1,4 @@
-# first of all import the socket library
+#!/usr/bin/python3.7
 import os
 import socket
 import time
@@ -41,6 +41,7 @@ counter = 0
 expected_connections = int(sys.argv[1])
 # timeFilePath =  os.getcwd() + '/../time.txt'
 timeFilePath = sys.argv[2] + 'time.txt'
+# print('test', file=open(timeFilePath, 'w'))
 while True:
 # Establish connection with client.
 	c, addr = s.accept()

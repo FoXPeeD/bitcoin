@@ -144,12 +144,9 @@ def run_cmd(instance_ip, cmd, time_out=None):
 	ssh = paramiko.SSHClient()
 	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 	# print('cmd - IP: ' + instance_ip)
-	if time_out is None:
-		ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE, timeout=time_out)
-	else:
-		ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE)
+	ssh.connect(instance_ip, username='ubuntu', key_filename=KEYFILE, timeout=time_out)
 	# print("Executing " + cmd)
-	stdin, stdout, stderr = ssh.exec_command(cmd)
+	stdin, stdout, stderr = ssh.exec_command(cmd, timeout=time_out)
 	stdoutStr = stdout.readlines()
 	ssh.close()
 	if stderr.readlines() != EMPTY_LIST:
@@ -201,9 +198,10 @@ confDefault = [
 	'listen=1',
 	'dbcache=4',
 	'datadir=' + remoteDataDirPath,
-	'blocknotify=python3.7 ' + remoteBaseDirPath + 'block.py %s',
+	'blocknotify=sudo ' + remoteBaseDirPath + 'block.py %s',
 	'blocksonly=1',
 	'mempoolexpiry=' + str(math.floor((datetime.now() - datetime(2019, 3, 1))/timedelta(hours=1)))  # default is 2 weeks
+	# 'maxmempool=4'
 ]
 
 confRegtest = [
@@ -389,13 +387,6 @@ if dataDirCreated:
 	debugPrint('	renamed dirs')
 
 else:
-
-	# print('should have used a previously prepared data')
-	# terminate_instances(instances_list)
-	# os.chdir(nodesPath + '/../data_dirs/')
-	# subprocess.run(['rm', '-rf', dataDirName], capture_output=False)
-	# sys.exit(0)
-
 	# copy previously prepared data as data dir
 	for node in range(0, num_clients):
 		try:
@@ -414,12 +405,14 @@ for node in range(0, num_clients):
 		if node == 0:
 			try:
 				send_file_to_ip(instances_public_ips_list[node], localBaseDirPath + 'server.py', remoteBaseDirPath)
+				run_cmd(instances_public_ips_list[node], 'chmod 777 ' + remoteBaseDirPath + 'server.py')
 			except Exception as error:
 				print(error)
 				terminate_instances(instances_list)
 				sys.exit(1)
 		try:
 			send_file_to_ip(instances_public_ips_list[node], localBaseDirPath + 'block.py', remoteBaseDirPath)
+			run_cmd(instances_public_ips_list[node], 'chmod 777 ' + remoteBaseDirPath + 'block.py')
 		except Exception as error:
 			print(error)
 			terminate_instances(instances_list)
@@ -435,6 +428,7 @@ for node in range(0, num_clients):
 	confThisNode = confDefault.copy()
 	if node == 0:
 		confThisNode[8] = 'blocksonly=0'
+		# confThisNode[10] = 'maxmempool=32'
 
 	# create [regtest] section of conf file
 	confThisNodeRegtest = confRegtest.copy()
@@ -494,10 +488,13 @@ input('press enter to start timing')
 # start script for timing
 print('running server on node 0 (the miner)...')
 runServerCmdArgs = [
+	'nohup',
 	'python3.7',
-	remoteBaseDirPath + ' server.py ',
+	remoteBaseDirPath + 'server.py',
 	str(num_clients),
 	remoteBaseDirPath,
+	'>/dev/null',
+	'2>/dev/null',
 	'&'
 ]
 runServerCmd = ' '.join(runServerCmdArgs)

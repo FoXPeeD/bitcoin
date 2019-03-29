@@ -8,7 +8,7 @@ import time
 import math
 
 # constants
-DEFAULT_DB_CHACHE_SIZE_MB = 4
+DEFAULT_DB_CHACHE_SIZE_MB = 1.8
 TX_DEFAULT_SENT_AMOUNT = 0.0001
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
@@ -107,17 +107,18 @@ confDefault = [
 	'rpcpassword=rpc',
 	'server=1',
 	'listen=1',
-	'dbcache=4',
+	'dbcache=4',  # actual UTXO set allocated on memory is 1.8MB (for 4MB dbcache)
 	'whitelist=127.0.0.1',
 	'node_dir_placeholder',
-	'blocknotify=python3.7 ' + parentDirPath + 'block.py %s',
-	'blocksonly=0'
+	'blocknotify=' + parentDirPath + 'local_block.py %s',
+	'blocksonly=0'  # ,
+	# 'maxmempool=4'
 ]
 
 confRegtest = [
 	'port_placeholder',
 	'rpc_port_placeholder'
-    ]
+	]
 
 
 bitcoindCmdArgs = [
@@ -207,8 +208,10 @@ for node in range(0, num_clients):
 	confDefault[7] = 'datadir=' + nodeDir
 	if node == 0:
 		confDefault[9] = 'blocksonly=0'
+		# confDefault[10] = 'maxmempool=32'
 	else:
 		confDefault[9] = 'blocksonly=1'
+		# confDefault[10] = 'maxmempool=4'
 	port = BASE_PORT_NUM + node
 	confRegtest[0] = 'port=' + str(port)
 	rpcport = BASE_RPC_PORT_NUM + node
@@ -230,7 +233,7 @@ for node in range(0, num_clients):
 	btcClients.append(subprocess.Popen(bitcoindCmdArgs, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT))
 	# print(bitcoindCmdArgs)
 	debugPrint("	started bitcoind, pid: " + str(btcClients[node].pid))
-time.sleep(5)
+time.sleep(15)
 
 input('press enter to start timing')
 
@@ -255,8 +258,8 @@ for node in range(1, num_clients):
 	exitWithMessageIfError(bestBlockRet.stderr, btcClients, 'Error getting node best block hash')
 	bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
 	if bestBlockHashThisNode != bestBlockHashMinerNode:
-		for btcClients in process:
-				btcClients.terminate()
+		for process in btcClients:
+				process.terminate()
 		sys.exit("nodes' blockchain are not synced")
 debugPrint("	all node are synced")
 
@@ -272,7 +275,7 @@ print(parentDirPath + '../')
 serverProc = subprocess.Popen(serverCmdArgs, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 startTime = time.time()
 
-
+input('press enter to generate')
 # generate block for timing
 generateCmdArgs = cliCmdArgs.copy()
 rpcport = BASE_RPC_PORT_NUM + 0
@@ -285,7 +288,7 @@ print('generated block for timing')
 
 # wait until server is done timing (all nodes got block)
 while serverProc.poll() is None:
-	if (time.time() - startTime) > 15:
+	if (time.time() - startTime) > 30:
 		print('server took too much time to finish')
 		for node in range(0, num_clients):
 			btcClients[node].terminate()
