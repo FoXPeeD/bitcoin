@@ -14,7 +14,7 @@ from datetime import datetime
 from datetime import timedelta
 
 # constants
-DEFAULT_DB_CHACHE_SIZE_MB = 4
+DEFAULT_DB_CHACHE_SIZE_MB = 1.8
 TX_DEFAULT_SENT_AMOUNT = 0.0001
 BASE_PORT_NUM = 18200
 BASE_RPC_PORT_NUM = 9200
