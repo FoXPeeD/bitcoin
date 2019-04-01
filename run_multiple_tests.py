@@ -69,7 +69,9 @@ connListTest = ['mesh']
 blockListTest = [0.15, 0.18, 0.22]
 utxoListTest = [1]
 
-resultsFilePath = localBaseDirPath + '../results/results_all.csv'
+currentDT = datetime.datetime.now()
+timeStr = currentDT.strftime("%Y-%m-%d_%H:%M:%S")
+resultsFilePath = localBaseDirPath + '../results/results_' + timeStr + '.csv'
 print('block size,UTXO set size,nodes,topography', file=open(resultsFilePath, 'w'), end='')
 for num in range(0, numberOfNodes):
 	print(',' + str(num), file=open(resultsFilePath, 'a'), end='')
