@@ -13,7 +13,7 @@ TX_DEFAULT_SENT_AMOUNT = 0.0001
 BASE_PORT_NUM = 18200
 BASE_RPC_PORT_NUM = 9200
 LOCAL_HOST = '127.0.0.1'
-TYPICAL_TX_SIZE_BYTES = 244
+TYPICAL_TX_SIZE_BYTES = 245
 TYPICAL_UTXO_SIZE_BYTES = 77
 BYTES_IN_MB = 1000000
 
@@ -133,6 +133,7 @@ cliCmdArgs = [
 	'rpc_port_placeholder'
 	]
 
+
 ####### create data directory of node
 os.chdir(parentDirPath+'../')
 if 'nodes' not in os.listdir():
@@ -145,11 +146,11 @@ os.mkdir('node_maker')
 utxo_size_MB = DEFAULT_DB_CHACHE_SIZE_MB * (utxo_size_of_db_cache_size_percentage / 100)
 utxo_set_size = math.floor((utxo_size_MB * BYTES_IN_MB) / TYPICAL_UTXO_SIZE_BYTES)
 print('utxo set size is ' + str(utxo_set_size))
-print('utxo set size in MB is ' + str(utxo_size_MB))
+print('utxo set size in MB is ' + str(utxo_size_MB)[0:5])
 
 MAX_TX_IN_BLOCK = math.floor((block_size_MB * BYTES_IN_MB) / TYPICAL_TX_SIZE_BYTES)
 print('Txs in block is ' + str(MAX_TX_IN_BLOCK))
-print('block size in MB is ' + str(block_size_MB))
+print('block size in MB is ' + str(block_size_MB)[0:5])
 
 
 os.chdir(parentDirPath+'../')
@@ -158,11 +159,9 @@ if 'data_dirs' not in os.listdir():
 
 # remove old folder if already present
 os.chdir(nodesPath)
-dataDir = 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB)
+dataDir = 'utxo-size-MB=' + str(utxo_size_MB)[0:5] + '_block-size-MB=' + str(block_size_MB)[0:5]
 if dataDir in os.listdir():
 	shutil.rmtree(dataDir)
-
-
 
 
 # create and make conf file
@@ -211,7 +210,7 @@ debugPrint("	generated " + str(blksNeeded) + " Initial blocks")
 # exitWithMessageIfError(getAddrRet.stderr, btcStartingChain, 'Error getting address')
 # addressStr = getAddrRet.stdout.decode("utf-8").split()[0]
 # debugPrint("	got address " + addressStr)
-addressStr = '2N6gFPhAAUbvnPk7YnUvrQ3pE5FZAwDEb3K' # address not belonging to either nodes
+addressStr = '2N6gFPhAAUbvnPk7YnUvrQ3pE5FZAwDEb3K'  # address not belonging to either nodes
 
 
 
@@ -228,9 +227,10 @@ for txNum in range(0, utxo_set_size):
 	sendTxRet = subprocess.run(TxCmdArgs, capture_output=True)
 	exitWithMessageIfError(sendTxRet.stderr, btcStartingChain, "Error sending Txs, failed on tx number " + str(txNum))
 	# printByteStreamOut(sendTxRet.stdout, 'd') # print Tx hashes
-	debugPrintNewLine('.')
-	if ((txNum+1) % 100) == 0:
-		debugPrint('\nsent 100 Txs')
+	if ((txNum+1) % 10) == 0:
+		debugPrintNewLine('.')	 # show progress
+	if ((txNum+1) % 1000) == 0:
+		debugPrint('\nsent ' + str(txNum+1) + ' UTXO set Txs until now')
 	if ((txNum+1) % MAX_TX_IN_BLOCK) == 0 and txNum != 0:
 		genRet = subprocess.run(genInitCmdArgs, capture_output=True)
 		exitWithMessageIfError(genRet.stderr, btcStartingChain, "Error generating block number " + str(txNum / MAX_TX_IN_BLOCK))
@@ -239,10 +239,10 @@ genInitCmdArgs[5] = '7'  # change command's number of generated blocks to 6 (for
 genLastRet = subprocess.run(genInitCmdArgs, capture_output=True)
 exitWithMessageIfError(genLastRet.stderr, btcStartingChain, "Error generating last block, number:" + str(txNum / MAX_TX_IN_BLOCK))
 bestBlockHashMiner = genLastRet.stdout.decode("utf-8").split()[1] # best block hash of miner node
-debugPrint("\n	sent all Txs")
+debugPrint('\n	sent all UTXO set Txs')
 timeTook = time.time() - t0
 debugPrint('\n')
-print(str(utxo_set_size) + ' UTXO Txs took ' + str(timeTook) + ' (avg '  + str(timeTook/utxo_set_size) + ' sec per Tx)')
+print(str(utxo_set_size) + ' UTXO Txs took ' + str(timeTook) + ' seconds (avg '  + str(timeTook/utxo_set_size) + ' sec per Tx)')
 print('finished generating initial chain')
 
 
@@ -251,21 +251,25 @@ t1 = time.time()
 TxCmdArgs = initCmdArgs.copy()
 TxCmdArgs.append('sendtoaddress')
 TxCmdArgs.append(addressStr)
-TxCmdArgs.append('amount_placeholder') # amount
+TxCmdArgs.append('amount_placeholder')  # amount
 
 for txNum in range(0, MAX_TX_IN_BLOCK):
 	TxCmdArgs[len(TxCmdArgs)-1] = str(TX_DEFAULT_SENT_AMOUNT)
 	sendTxRet = subprocess.run(TxCmdArgs, capture_output=True)
 	exitWithMessageIfError(sendTxRet.stderr, btcStartingChain, "Error sending Txs, failed on tx number " + str(txNum))
 	# printByteStreamOut(sendTxRet.stdout, 'd') # print Tx hashes
-	debugPrintNewLine('.')
-	if ((txNum+1) % 100) == 0:
-		debugPrint('\nsent 100 Txs, ' + str(txNum+1) + ' in total')
-debugPrint("\n	sent all Txs")
+	if ((txNum+1) % 10) == 0:
+		debugPrintNewLine('.')	 # show progress
+	if ((txNum+1) % 1000) == 0:
+		debugPrint('\nsent ' + str(txNum+1) + ' block Txs until now')
+debugPrint("\n	sent all block Txs")
 timeTook = time.time() - t1
 debugPrint('\n')
-print(str(utxo_set_size) + ' of waiting Txs took ' + str(timeTook) + ' (avg '  + str(timeTook/utxo_set_size) + ' sec per Tx)')
-print('finished generating initial chain')
+print(str(MAX_TX_IN_BLOCK) + ' of block Txs took ' + str(timeTook) + ' seconds (avg '  + str(timeTook/utxo_set_size) + ' sec per Tx)')
+print('finished generating block')
+
+timeTook = time.time() - t0
+print(str(MAX_TX_IN_BLOCK + utxo_set_size) + ' of Txs took ' + str(timeTook) + 'seconds in total (avg '  + str(timeTook/(MAX_TX_IN_BLOCK+utxo_set_size)) + ' sec per Tx)')
 
 
 stopCmdArgs = initCmdArgs.copy()
@@ -281,7 +285,7 @@ cpCmdArgs = [
 	'cp',
 	'-rf',
 	nodeDir,
-	nodeDir + '/../../data_dirs/' + 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB)
+	nodeDir + '/../../data_dirs/' + dataDir
 
 ]
 ret=subprocess.run(cpCmdArgs, capture_output=True)

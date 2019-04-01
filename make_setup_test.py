@@ -9,6 +9,7 @@ import time
 import math
 import paramiko
 import boto3
+import random
 from scp import SCPClient
 from datetime import datetime
 from datetime import timedelta
@@ -16,25 +17,29 @@ from datetime import timedelta
 # constants
 DEFAULT_DB_CHACHE_SIZE_MB = 1.8
 TX_DEFAULT_SENT_AMOUNT = 0.0001
-BASE_PORT_NUM = 18200
-BASE_RPC_PORT_NUM = 9200
+BASE_PORT_NUM = 18100
+BASE_RPC_PORT_NUM = 9100
 LOCAL_HOST = '127.0.0.1'
 PRIVATE_IP_PREFIX = '10.0.2.1'
-TYPICAL_TX_SIZE_BYTES = 244
+TYPICAL_TX_SIZE_BYTES = 245
 TYPICAL_UTXO_SIZE_BYTES = 77
 BYTES_IN_MB = 1000000
 TAR_FILE_FULL_NAME = 'data-full.tar.gz'
 TAR_FILE_NO_MEMPOOL_NAME = 'data-no-mempool.tar.gz'
 EMPTY_LIST = []
-debug = 1
+SEED_STR = 'tal_itzik'
+NUMBER_OF_CONNECTIONS = 4
+CONNECTION_SET = {}
+debug = 1  # verbose flag for debugging
 
-if len(sys.argv) < 4:
+if len(sys.argv) < 5:
 	print('wrong number of arguments')
 	sys.stderr.write("wrong number of arguments\n")
 	sys.stderr.write("usage:\n")
 	sys.stderr.write("1: block size in MB\n")
 	sys.stderr.write("2: percentage of utxo size from dbcache\n")
 	sys.stderr.write("3: number of clients\n")
+	sys.stderr.write("4: connectivity type of nodes\n")
 	sys.exit(1)
 
 
@@ -47,28 +52,10 @@ bitcoin_cliFileName = './bitcoin-cli'
 remoteBaseDirPath = '/home/ubuntu/project/'
 remoteDataDirPath = remoteBaseDirPath + 'dataDir/'
 remoteBinPath = remoteBaseDirPath + 'bitcoin/src/'
-KEYFILE = localBaseDirPath + '../itzik_test_key_aws.pem'  # TODO: change to project key
+KEYFILE = localBaseDirPath + '../itzik_test_key_aws.pem'  # TODO-SETUP: change project key
 
 
 ####### helper functions
-def printByteStreamOut(stream, processName=''):
-	print('# ' + processName + ' stdout:')
-	if stream is None:
-		print('<Empty>')
-	else:
-		print(stream.decode("utf-8"))
-	print('')
-
-
-def printByteStreamErr(stream, processName=''):
-	print('$ ' + processName + ' stderr:')
-	if stream is None:
-		print('<Empty>')
-	else:
-		print(stream.decode("utf-8"))
-	print('')
-
-
 def localErrorReturned(stream):
 	if stream is None:
 		return False
@@ -89,18 +76,6 @@ def localExitWithMessageIfError(stream, process, errString):
 					proc.terminate()
 			else:
 				process.terminate()
-		sys.exit(errString)
-
-
-def sshExitWithMessageIfError(stream, instances, errString):
-	if errorReturned(stream):
-		print('Error received:')
-		print(stream)
-		if instances is not None:
-			if isinstance(instances, list):
-				terminate_instances(instances)
-			else:
-				terminate_instances(instances)
 		sys.exit(errString)
 
 
@@ -132,7 +107,6 @@ def get_instances_public_IPs(instances):
 
 def terminate_instances(instances):
 	print('terminating')
-	# print(instances)
 	ec2 = boto3.client('ec2')
 	try:
 		ec2.terminate_instances(InstanceIds=instances, DryRun=False)
@@ -181,6 +155,7 @@ def get_file_from_ip(instance_ip, remoteFile, localPath):
 	ssh.close()
 
 
+# returns connection for node such that every node is connected to every other node
 def getMeshConnections(nodeNumber, numberOfNodes):
 	connList = []
 	for to_node in range(0, numberOfNodes):
@@ -188,6 +163,58 @@ def getMeshConnections(nodeNumber, numberOfNodes):
 			continue
 		connList.append(to_node)
 	return connList
+
+
+# returns random connections for that node, and a connection to the next node.
+# consistent between run with the same node index and total number of nodes.
+def getStaticRandomConnections(nodeNumber, numberOfNodes):
+	connSet = set()
+	connSet.add((nodeNumber+1) % numberOfNodes)  # node is connected to the following node to ensure full connectivity
+	prevLen = len(connSet)
+	for conn in range(0, NUMBER_OF_CONNECTIONS - 1):
+		rand = hash(SEED_STR)
+		iter = 0
+		while len(connSet) == prevLen:
+			iter += 1
+			rand = int(str( int(str(rand)[0:10]) * hash(str(nodeNumber) + ' ' + str(conn) + ' ' + str(iter)) )[0:10])
+			# print('rand: ' + str(rand))
+			to_node = rand % numberOfNodes
+			# print(to_node)
+			if to_node == nodeNumber:
+				continue
+			connSet.add(to_node)
+		# print('selected ' + str(to_node))
+		prevLen = len(connSet)
+	# print('connections for node ' + str(nodeNumber) + ': ' + str(connSet))
+	return list(connSet)
+
+
+# returns random connections for that node, and a connection to the next node.
+# changes with each run
+def getDynamicRandomConnections(nodeNumber, numberOfNodes):
+	connSet = set()
+	connSet.add((nodeNumber+1) % numberOfNodes)  # node is connected to the following node to ensure full connectivity
+	prevLen = len(connSet)
+	for conn in range(0, NUMBER_OF_CONNECTIONS - 1):
+		while len(connSet) == prevLen:
+			to_node = random.randrange(numberOfNodes)
+			if to_node == nodeNumber:
+				continue
+			connSet.add(to_node)
+		prevLen = len(connSet)
+	return list(connSet)
+
+
+def stringToConnFunc(string):
+	switcher = {
+		'mesh': getMeshConnections,
+		'static': getStaticRandomConnections,
+		'dynamic': getDynamicRandomConnections
+	}
+	if {string}.issubset(switcher):
+		return switcher.get(string)
+	else:
+		return None
 
 
 confDefault = [
@@ -201,13 +228,9 @@ confDefault = [
 	'blocknotify=sudo ' + remoteBaseDirPath + 'block.py %s',
 	'blocksonly=1',
 	'mempoolexpiry=' + str(math.floor((datetime.now() - datetime(2019, 3, 1))/timedelta(hours=1)))  # default is 2 weeks
-	# 'maxmempool=4'
 ]
 
-confRegtest = [
-	# 'port=' + str(BASE_PORT_NUM),
-	# 'rpcport=' + str(BASE_RPC_PORT_NUM)
-]
+confRegtest = []
 
 
 bitcoindCmdArgs = [
@@ -226,21 +249,28 @@ cliCmdArgs = [
 
 
 ####### get args and check them
-# num_clients = 3
-num_clients = int((sys.argv[3]))
-if num_clients < 2:
-	sys.stderr.write("number of clients must be greater than 1\n")
-	sys.exit(1)
-# block_size_MB = 0.025
+
 block_size_MB = float(sys.argv[1])
 if ((block_size_MB*BYTES_IN_MB)/TYPICAL_TX_SIZE_BYTES) < 1:
 	sys.stderr.write("block size is too small\n")
 	sys.exit(1)
-# utxo_size_of_db_cache_size_percentage = 0.1
 utxo_size_of_db_cache_size_percentage = float(sys.argv[2])
 if utxo_size_of_db_cache_size_percentage < 0:
 	sys.stderr.write("UTXO size must be non-negative\n")
 	sys.exit(1)
+num_clients = int((sys.argv[3]))
+if num_clients <= NUMBER_OF_CONNECTIONS:
+	sys.stderr.write('number of clients must be greater than number of connections (' + str(NUMBER_OF_CONNECTIONS) + ')\n')
+	sys.exit(1)
+connectivity = sys.argv[4]
+connFunc = stringToConnFunc(connectivity)
+if connFunc is None:
+	sys.stderr.write('connectivity type string can only be one of the following:\n')
+	sys.stderr.write('mesh - all nodes are connected to all other nodes\n')
+	sys.stderr.write('static - ' + str(NUMBER_OF_CONNECTIONS) + ' random connections for each node, consistant between runs\n')
+	sys.stderr.write('dynamic - ' + str(NUMBER_OF_CONNECTIONS) + ' random connections for each node, changes every run\n')
+	sys.exit(1)
+
 
 
 ####### make data dir if not found
@@ -258,7 +288,7 @@ print('Txs in block is ' + str(MAX_TX_IN_BLOCK))
 print('block size in MB is ' + str(block_size_MB))
 
 dataDirCreated = False
-dataDirName = 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB)
+dataDirName = 'utxo-size-MB=' + str(utxo_size_MB)[0:5] + '_block-size-MB=' + str(block_size_MB)[0:5]
 if dataDirName not in os.listdir('.'):
 	makeDirCmdArgs = [
 		'python3.7',
@@ -298,13 +328,6 @@ if dataDirName not in os.listdir('.'):
 	localExitWithMessageIfError(tarNoMempoolRes.stderr, None, 'Error making no-mempool tar file')
 	debugPrint('created partial tar file')
 
-	# time.sleep(2)
-	# subprocess.run(['ls'], capture_output=False)
-	# chmodRes = subprocess.run(['chmod', '555', TAR_FILE_FULL_NAME], capture_output=False)
-	# localExitWithMessageIfError(chmodRes.stderr, None, 'Error chmod full tar file')
-	# chmodRes = subprocess.run(['chmod', '555', TAR_FILE_NO_MEMPOOL_NAME], capture_output=False)
-	# localExitWithMessageIfError(chmodRes.stderr, None, 'Error chmod no-mempool tar file')
-
 	dataDirCreated = True
 
 
@@ -318,9 +341,8 @@ for instNum in range(0, num_clients):
 		intra_ip_addr = PRIVATE_IP_PREFIX + inst_num_str
 		inst = ec2_rec.create_instances(
 			ImageId='ami-0b1650b9ad3f7a939',
-			# ImageId='ami-0a52acf469d39b2ce',
 			InstanceType='t2.micro',
-			KeyName='itzik_test_key',  # TODO: change to project key
+			KeyName='itzik_test_key',  # TODO-SETUP: change project key
 			MaxCount=1,
 			MinCount=1,
 			TagSpecifications=[
@@ -334,11 +356,10 @@ for instNum in range(0, num_clients):
 					]
 				},
 			],
-			NetworkInterfaces=[
+			NetworkInterfaces=[	# TODO-SETUP: change subnet and security group
 				{"DeviceIndex": 0, "SubnetId": "subnet-08db8bec756dcb30a", "PrivateIpAddress": intra_ip_addr, "Groups": ['sg-06523c97735030cf4']}
 			],
 			)
-		# debugPrint('	started instance ' + str(instNum))
 		instances_list.append(inst[0].id)
 	except Exception as error:
 		print(error)
@@ -346,7 +367,6 @@ for instNum in range(0, num_clients):
 		sys.exit(1)
 
 # debugPrint(instances_list)
-# TODO: wait for instances to finish loading
 print('waiting for instances to finish loading...')
 time.sleep(45)
 instances_public_ips_list = get_instances_public_IPs(instances_list)
@@ -369,7 +389,7 @@ if dataDirCreated:
 		except Exception as error:
 			print(error)
 			terminate_instances(instances_list)
-			sys.exit(0)
+			sys.exit(1)
 	debugPrint('	copied tar files')
 
 	# extract tar
@@ -428,16 +448,13 @@ for node in range(0, num_clients):
 	confThisNode = confDefault.copy()
 	if node == 0:
 		confThisNode[8] = 'blocksonly=0'
-		# confThisNode[10] = 'maxmempool=32'
 
 	# create [regtest] section of conf file
 	confThisNodeRegtest = confRegtest.copy()
-	# confThisNodeRegtest[0] = 'port=' + str(BASE_PORT_NUM + node)
-	# confThisNodeRegtest[1] = 'rpcport=' + str(BASE_RPC_PORT_NUM + node)
 	nodes_connections_list = getMeshConnections(node, num_clients)
 	for toNode in nodes_connections_list:
-		# confThisNodeRegtest.append('connect=' + PRIVATE_IP_PREFIX + str(toNode).zfill(2) + ':' + str(BASE_PORT_NUM + toNode))
 		confThisNodeRegtest.append('connect=' + PRIVATE_IP_PREFIX + str(toNode).zfill(2))
+
 	# create conf file from sections
 	content = '\n'.join(confThisNode)
 	contentRegTest = '\n'.join(confThisNodeRegtest)
@@ -456,36 +473,33 @@ for node in range(0, num_clients):
 
 	# run bitcoind on remote node
 	runBitcoindCmd = ' '.join(bitcoindCmdArgs)
-	# input('check conf file, press enter to continue')
 	run_cmd(instances_public_ips_list[node], runBitcoindCmd)
 
 print('finished calling bitcoind on remote nodes')
 time.sleep(5)
 
 
-# make sure all node are synced getbestblockhash
+####### make sure all node are synced
+# get miner's best block hash
 bestBlockCmdArgs = cliCmdArgs.copy()
 bestBlockCmdArgs.append('getbestblockhash')
 bestBlockCmd = ' '.join(bestBlockCmdArgs)
 bestBlockRet = run_cmd(instances_public_ips_list[0], bestBlockCmd)
 bestBlockHashMinerNode = bestBlockRet
-# bestBlockHashMinerNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
 
+# verify all other nodes have the same best block
 for node in range(1, num_clients):
-	# rpcport = BASE_RPC_PORT_NUM + node
-	# bestBlockCmdArgs[3] = '-rpcport=' + str(rpcport)
 	bestBlockRet = run_cmd(instances_public_ips_list[node], bestBlockCmd)
 	bestBlockHashThisNode = bestBlockRet
-	# bestBlockHashThisNode = '"' + bestBlockRet.stdout.decode("utf-8").split()[0] + '"'
 	if bestBlockHashThisNode != bestBlockHashMinerNode:
 		input('blockchains are not synced, press enter to terminate...')
 		terminate_instances(instances_list)
 		sys.exit("nodes' blockchain are not synced")
 debugPrint("	all node are synced")
 
-input('press enter to start timing')
+# input('press enter to start timing')
 
-# start script for timing
+# start server script for timing
 print('running server on node 0 (the miner)...')
 runServerCmdArgs = [
 	'nohup',
@@ -515,7 +529,7 @@ while True:
 	try:
 		get_file_from_ip(instances_public_ips_list[0], remoteBaseDirPath + 'time.txt', localBaseDirPath + '../')
 	except Exception as error:
-		if (time.time() - startTime) > 15:
+		if (time.time() - startTime) > 30:
 			input("server took too much time to finish, press enter to terminate...")
 			terminate_instances(instances_list)
 			sys.exit("server took too much time to finish")
@@ -530,6 +544,7 @@ with open(localBaseDirPath + '../time.txt') as f:
 	debugPrint('	times:\n' + str(timeGot))
 
 
-input("Press Enter to terminate AWS machines")
+# input("Press Enter to terminate AWS machines")
 terminate_instances(instances_list)
 print("terminated")
+sys.exit(0)

@@ -39,24 +39,26 @@ s.listen()
 # an error occurs 
 counter = 0
 expected_connections = int(sys.argv[1])
-# timeFilePath =  os.getcwd() + '/../time.txt'
 timeFilePath = sys.argv[2] + 'time.txt'
-# print('test', file=open(timeFilePath, 'w'))
+results = ''
+print('asd', file=open(timeFilePath, 'w'))
 while True:
 # Establish connection with client.
 	c, addr = s.accept()
 	if counter == 0:
 		# start clock
 		t0 = time.time()
-		print(str(counter) + ',' + str(0), file=open(timeFilePath, 'w'))
+		results += (str(0))
+		# print(str(counter) + ',' + str(0), file=open(timeFilePath, 'w'))
 	else:
 		t1 = time.time()
-		print(str(counter) + ',' + str(t1-t0), file=open(timeFilePath, 'a'))
+		results += (',' + str(t1-t0))
+		# print(str(counter) + ',' + str(t1-t0), file=open(timeFilePath, 'a'))
 	counter = counter + 1
 	if counter == expected_connections:
 		break
 
 	# Close the connection with the client
 	c.close()
-
+print(results, file=open(timeFilePath, 'w'))
 exit(0)

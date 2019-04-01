@@ -13,7 +13,7 @@ TX_DEFAULT_SENT_AMOUNT = 0.0001
 BASE_PORT_NUM = 18100
 BASE_RPC_PORT_NUM = 9100
 LOCAL_HOST = '127.0.0.1'
-TYPICAL_TX_SIZE_BYTES = 244
+TYPICAL_TX_SIZE_BYTES = 245
 TYPICAL_UTXO_SIZE_BYTES = 77
 BYTES_IN_MB = 1000000
 
@@ -161,7 +161,7 @@ MAX_TX_IN_BLOCK = math.floor((block_size_MB * BYTES_IN_MB) / TYPICAL_TX_SIZE_BYT
 print('Txs in block is ' + str(MAX_TX_IN_BLOCK))
 print('block size in MB is ' + str(block_size_MB))
 
-dataDir = 'utxo-size-MB=' + str(utxo_size_MB) + '_block-size-MB=' + str(block_size_MB)
+dataDir = 'utxo-size-MB=' + str(utxo_size_MB)[0:5] + '_block-size-MB=' + str(block_size_MB)[0:5]
 if dataDir not in os.listdir():
 	makeDirCmdArgs = [
 		'python3.7',
