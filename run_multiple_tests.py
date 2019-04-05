@@ -76,10 +76,11 @@ print('block size,UTXO set size,nodes,topography', file=open(resultsFilePath, 'w
 for num in range(0, numberOfNodes):
 	print(',' + str(num), file=open(resultsFilePath, 'a'), end='')
 print('', file=open(resultsFilePath, 'a'))
-for iteration in range(0,repeatMeasurements):
-	for conn in connListTest:
-		for utxoSize in utxoListTest:
-			for blockSize in blockListTest:
+for conn in connListTest:
+	for utxoSize in utxoListTest:
+		for blockSize in blockListTest:
+			for iteration in range(0,repeatMeasurements):
+
 				# run test
 				testCmdArgs = [
 						'python3.7',
