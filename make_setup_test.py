@@ -340,7 +340,7 @@ for instNum in range(0, num_clients):
 		key_val = 'ttis-inst_' + inst_num_str
 		intra_ip_addr = PRIVATE_IP_PREFIX + inst_num_str
 		inst = ec2_rec.create_instances(
-			ImageId='ami-0b1650b9ad3f7a939',
+			ImageId='ami-0a234ad40e779e3cd',
 			InstanceType='t2.micro',
 			KeyName='itzik_test_key',  # TODO-SETUP: change project key
 			MaxCount=1,
