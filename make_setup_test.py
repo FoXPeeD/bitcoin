@@ -447,6 +447,7 @@ for node in range(0, num_clients):
 	# create default section of conf file
 	confThisNode = confDefault.copy()
 	if node == 0:
+		confThisNode[5] = 'dbcache=50'
 		confThisNode[8] = 'blocksonly=0'
 
 	# create [regtest] section of conf file
