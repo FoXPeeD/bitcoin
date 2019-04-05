@@ -41,7 +41,7 @@ counter = 0
 expected_connections = int(sys.argv[1])
 timeFilePath = sys.argv[2] + 'time.txt'
 results = ''
-print('asd', file=open(timeFilePath, 'w'))
+# print('error', file=open(timeFilePath, 'w'))
 while True:
 # Establish connection with client.
 	c, addr = s.accept()
