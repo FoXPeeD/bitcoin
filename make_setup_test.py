@@ -451,7 +451,7 @@ for node in range(0, num_clients):
 
 	# create [regtest] section of conf file
 	confThisNodeRegtest = confRegtest.copy()
-	nodes_connections_list = getMeshConnections(node, num_clients)
+	nodes_connections_list = connFunc(node, num_clients)
 	for toNode in nodes_connections_list:
 		confThisNodeRegtest.append('connect=' + PRIVATE_IP_PREFIX + str(toNode).zfill(2))
 

@@ -60,65 +60,66 @@ def localExitWithMessageIfError(stream, process, errString):
 		sys.exit(errString)
 
 
-numberOfNodes = 20
+numberOfNodes = 1
 # utxoList = [1, 50, 100, 200]
 # blockList = [0.1, 0.2, 0.5, 1, 2, 4]
 # connList = ['mesh', 'static', 'dynamic']
-
+repeatMeasurements = 1
 connListTest = ['mesh']
-blockListTest = [0.15, 0.18, 0.22]
-utxoListTest = [1]
+blockListTest = [1]
+utxoListTest = [400]
 
-currentDT = datetime.datetime.now()
+currentDT = datetime.now()
 timeStr = currentDT.strftime("%Y-%m-%d_%H:%M:%S")
 resultsFilePath = localBaseDirPath + '../results/results_' + timeStr + '.csv'
 print('block size,UTXO set size,nodes,topography', file=open(resultsFilePath, 'w'), end='')
 for num in range(0, numberOfNodes):
 	print(',' + str(num), file=open(resultsFilePath, 'a'), end='')
 print('', file=open(resultsFilePath, 'a'))
-for conn in connListTest:
-	for utxoSize in utxoListTest:
-		for blockSize in blockListTest:
-			# run test
-			testCmdArgs = [
-					'python3.7',
-					'make_setup_test.py',
-					str(blockSize),
-					str(utxoSize),
-					str(numberOfNodes),
-					conn
+for iteration in range(0,repeatMeasurements):
+	for conn in connListTest:
+		for utxoSize in utxoListTest:
+			for blockSize in blockListTest:
+				# run test
+				testCmdArgs = [
+						'python3.7',
+						'make_setup_test.py',
+						str(blockSize),
+						str(utxoSize),
+						str(numberOfNodes),
+						conn
+					]
+				print('*************************************************')
+				print(' '.join(testCmdArgs))
+				print('*************************************************')
+				testRes = subprocess.run(testCmdArgs, capture_output=False)
+				localExitWithMessageIfError(testRes.stderr, None, 'Error running test')
+
+				# move results
+				mvTimeCmdArgs = [
+						'mv',
+						localBaseDirPath + '../time.txt',
+						localBaseDirPath + '../results/',
 				]
-			print('*************************************************')
-			print(' '.join(testCmdArgs))
-			print('*************************************************')
-			testRes = subprocess.run(testCmdArgs, capture_output=False)
-			localExitWithMessageIfError(testRes.stderr, None, 'Error running test')
+				mvTimeRes = subprocess.run(mvTimeCmdArgs, capture_output=False)
+				localExitWithMessageIfError(mvTimeRes.stderr, None, 'Error moving results')
 
-			# move results
-			mvTimeCmdArgs = [
-					'mv',
-					localBaseDirPath + '../time.txt',
-					localBaseDirPath + '../results/',
-			]
-			mvTimeRes = subprocess.run(mvTimeCmdArgs, capture_output=False)
-			localExitWithMessageIfError(mvTimeRes.stderr, None, 'Error moving results')
+				# change results file name
+				resultNameStr = str(blockSize) + '_' + str(utxoSize) + '_' + str(numberOfNodes) + '_' + conn
+				fileName = resultNameStr + '.csv'
+				nameCmdArgs = [
+						'mv',
+						localBaseDirPath + '../results/time.txt',
+						localBaseDirPath + '../results/' + fileName
+				]
+				nameRes = subprocess.run(nameCmdArgs, capture_output=False)
+				localExitWithMessageIfError(nameRes.stderr, None, 'Error changing name of results file')
 
-			# change results file name
-			resultNameStr = str(blockSize) + '_' + str(utxoSize) + '_' + str(numberOfNodes) + '_' + conn
-			fileName = resultNameStr + '.csv'
-			nameCmdArgs = [
-					'mv',
-					localBaseDirPath + '../results/time.txt',
-					localBaseDirPath + '../results/' + fileName
-			]
-			nameRes = subprocess.run(nameCmdArgs, capture_output=False)
-			localExitWithMessageIfError(nameRes.stderr, None, 'Error changing name of results file')
-
-			# insert results to all results file
-			print(str(blockSize) + ',' + str(utxoSize) + ',' + str(numberOfNodes) + ',' + conn + ',', file=open(resultsFilePath, 'a'), end='')
-			with open(localBaseDirPath + '../results/' + fileName) as f:
-				output = f.read()
-				print(output, file=open(resultsFilePath, 'a'))
+				# insert results to all results file
+				print(str(blockSize) + ',' + str(utxoSize) + ',' + str(numberOfNodes) + ',' + conn + ',', file=open(resultsFilePath, 'a'), end='')
+				with open(localBaseDirPath + '../results/' + fileName) as f:
+					output = f.read()
+					print(output, file=open(resultsFilePath, 'a'), end='')
 
 
 print('$ done with all tests $')
