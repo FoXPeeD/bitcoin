@@ -166,7 +166,7 @@ def getMeshConnections(nodeNumber, numberOfNodes):
 
 
 # returns random connections for that node, and a connection to the next node.
-# consistent between run with the same node index and total number of nodes.
+# consistent between runs with the same node index and total number of nodes.
 def getStaticRandomConnections(nodeNumber, numberOfNodes):
 	connSet = set()
 	connSet.add((nodeNumber+1) % numberOfNodes)  # node is connected to the following node to ensure full connectivity
