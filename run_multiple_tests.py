@@ -2,31 +2,21 @@
 
 import sys
 import os
-import shutil
 import subprocess
-import shlex
 import time
-import math
-import paramiko
-import boto3
-from scp import SCPClient
 from datetime import datetime
-from datetime import timedelta
+
+
+# change these parameters:
+numberOfNodes = 20
+utxoList = [1, 25, 100, 150]
+blockList = [1]
+connList = ['mesh']
+# connList = ['mesh', 'static', 'dynamic']
+repeatMeasurements = 4
+
 
 # constants
-DEFAULT_DB_CHACHE_SIZE_MB = 1.8
-TX_DEFAULT_SENT_AMOUNT = 0.0001
-BASE_PORT_NUM = 18100
-BASE_RPC_PORT_NUM = 9100
-LOCAL_HOST = '127.0.0.1'
-PRIVATE_IP_PREFIX = '10.0.2.1'
-TYPICAL_TX_SIZE_BYTES = 245
-TYPICAL_UTXO_SIZE_BYTES = 77
-BYTES_IN_MB = 1000000
-TAR_FILE_FULL_NAME = 'data-full.tar.gz'
-TAR_FILE_NO_MEMPOOL_NAME = 'data-no-mempool.tar.gz'
-EMPTY_LIST = []
-debug = 1  # verbose flag for debugging
 delim = '/'
 localBaseDirPath = os.getcwd() + '/'
 nodesPath = localBaseDirPath + '../nodes/'
@@ -60,14 +50,7 @@ def localExitWithMessageIfError(stream, process, errString):
 		sys.exit(errString)
 
 
-numberOfNodes = 20
-utxoList = [50]
-blockList = [0.5, 1, 2, 4]
-connList = ['mesh', 'static', 'dynamic']
-repeatMeasurements = 5
-# connListTest = ['mesh']
-# blockListTest = [1]
-# utxoListTest = [400]
+
 
 currentDT = datetime.now()
 timeStr = currentDT.strftime("%Y-%m-%d_%H:%M:%S")
