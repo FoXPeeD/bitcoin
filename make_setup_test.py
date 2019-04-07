@@ -531,7 +531,7 @@ while True:
 		get_file_from_ip(instances_public_ips_list[0], remoteBaseDirPath + 'time.txt', localBaseDirPath + '../')
 	except Exception as error:
 		if (time.time() - startTime) > 30:
-			# input("server took too much time to finish, press enter to terminate...")
+			input("server took too much time to finish, press enter to terminate...")
 			terminate_instances(instances_list)
 			sys.exit("server took too much time to finish")
 		else:
