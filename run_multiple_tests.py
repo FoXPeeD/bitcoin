@@ -60,14 +60,14 @@ def localExitWithMessageIfError(stream, process, errString):
 		sys.exit(errString)
 
 
-numberOfNodes = 1
-# utxoList = [1, 50, 100, 200]
-# blockList = [0.1, 0.2, 0.5, 1, 2, 4]
-# connList = ['mesh', 'static', 'dynamic']
-repeatMeasurements = 1
-connListTest = ['mesh']
-blockListTest = [1]
-utxoListTest = [400]
+numberOfNodes = 20
+utxoList = [50]
+blockList = [0.5, 1, 2, 4]
+connList = ['mesh', 'static', 'dynamic']
+repeatMeasurements = 5
+# connListTest = ['mesh']
+# blockListTest = [1]
+# utxoListTest = [400]
 
 currentDT = datetime.now()
 timeStr = currentDT.strftime("%Y-%m-%d_%H:%M:%S")
@@ -76,10 +76,10 @@ print('block size,UTXO set size,nodes,topography', file=open(resultsFilePath, 'w
 for num in range(0, numberOfNodes):
 	print(',' + str(num), file=open(resultsFilePath, 'a'), end='')
 print('', file=open(resultsFilePath, 'a'))
-for conn in connListTest:
-	for utxoSize in utxoListTest:
-		for blockSize in blockListTest:
-			for iteration in range(0,repeatMeasurements):
+for conn in connList:
+	for utxoSize in utxoList:
+		for blockSize in blockList:
+			for iteration in range(0, repeatMeasurements):
 
 				# run test
 				testCmdArgs = [
@@ -121,6 +121,9 @@ for conn in connListTest:
 				with open(localBaseDirPath + '../results/' + fileName) as f:
 					output = f.read()
 					print(output, file=open(resultsFilePath, 'a'), end='')
+
+				time.sleep(60)  # wait for instances to terminate
+
 
 
 print('$ done with all tests $')
